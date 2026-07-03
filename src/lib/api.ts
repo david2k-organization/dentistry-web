@@ -1,5 +1,15 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
+// Envelope response chung của backend (TransformInterceptor)
+export type ApiEnvelope<T> = {
+  success: boolean;
+  statusCode: number;
+  message: string;
+  data: T;
+  timestamp?: string;
+  path?: string;
+};
+
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "/api",
   withCredentials: true, // gửi cookie (cho refresh token httpOnly)
