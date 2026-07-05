@@ -9,86 +9,137 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as PatientsIndexRouteImport } from './routes/patients/index'
-import { Route as PatientsPatientIdRouteImport } from './routes/patients/$patientId'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as authLoginRouteImport } from './routes/(auth)/login'
+import { Route as AuthenticatedPatientsIndexRouteImport } from './routes/_authenticated/patients/index'
+import { Route as AuthenticatedPatientsPatientIdRouteImport } from './routes/_authenticated/patients/$patientId'
 
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const authLoginRoute = authLoginRouteImport.update({
+  id: '/(auth)/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PatientsIndexRoute = PatientsIndexRouteImport.update({
-  id: '/patients/',
-  path: '/patients/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PatientsPatientIdRoute = PatientsPatientIdRouteImport.update({
-  id: '/patients/$patientId',
-  path: '/patients/$patientId',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const AuthenticatedPatientsIndexRoute =
+  AuthenticatedPatientsIndexRouteImport.update({
+    id: '/patients/',
+    path: '/patients/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPatientsPatientIdRoute =
+  AuthenticatedPatientsPatientIdRouteImport.update({
+    id: '/patients/$patientId',
+    path: '/patients/$patientId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/patients/$patientId': typeof PatientsPatientIdRoute
-  '/patients/': typeof PatientsIndexRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/login': typeof authLoginRoute
+  '/patients/$patientId': typeof AuthenticatedPatientsPatientIdRoute
+  '/patients/': typeof AuthenticatedPatientsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/patients/$patientId': typeof PatientsPatientIdRoute
-  '/patients': typeof PatientsIndexRoute
+  '/login': typeof authLoginRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/patients/$patientId': typeof AuthenticatedPatientsPatientIdRoute
+  '/patients': typeof AuthenticatedPatientsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/patients/$patientId': typeof PatientsPatientIdRoute
-  '/patients/': typeof PatientsIndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/(auth)/login': typeof authLoginRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/patients/$patientId': typeof AuthenticatedPatientsPatientIdRoute
+  '/_authenticated/patients/': typeof AuthenticatedPatientsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/patients/$patientId' | '/patients/'
+  fullPaths: '/' | '/login' | '/patients/$patientId' | '/patients/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/patients/$patientId' | '/patients'
-  id: '__root__' | '/' | '/patients/$patientId' | '/patients/'
+  to: '/login' | '/' | '/patients/$patientId' | '/patients'
+  id:
+    | '__root__'
+    | '/_authenticated'
+    | '/(auth)/login'
+    | '/_authenticated/'
+    | '/_authenticated/patients/$patientId'
+    | '/_authenticated/patients/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  PatientsPatientIdRoute: typeof PatientsPatientIdRoute
-  PatientsIndexRoute: typeof PatientsIndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  authLoginRoute: typeof authLoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/(auth)/login': {
+      id: '/(auth)/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof authLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/patients/': {
-      id: '/patients/'
+    '/_authenticated/patients/': {
+      id: '/_authenticated/patients/'
       path: '/patients'
       fullPath: '/patients/'
-      preLoaderRoute: typeof PatientsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedPatientsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/patients/$patientId': {
-      id: '/patients/$patientId'
+    '/_authenticated/patients/$patientId': {
+      id: '/_authenticated/patients/$patientId'
       path: '/patients/$patientId'
       fullPath: '/patients/$patientId'
-      preLoaderRoute: typeof PatientsPatientIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedPatientsPatientIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedPatientsPatientIdRoute: typeof AuthenticatedPatientsPatientIdRoute
+  AuthenticatedPatientsIndexRoute: typeof AuthenticatedPatientsIndexRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedPatientsPatientIdRoute: AuthenticatedPatientsPatientIdRoute,
+  AuthenticatedPatientsIndexRoute: AuthenticatedPatientsIndexRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  PatientsPatientIdRoute: PatientsPatientIdRoute,
-  PatientsIndexRoute: PatientsIndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  authLoginRoute: authLoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

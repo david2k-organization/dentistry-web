@@ -1,5 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
+import { clearTokens, getAccessToken } from "@/features/auth/auth-storage";
+
 // Envelope response chung của backend (TransformInterceptor)
 export type ApiEnvelope<T> = {
   success: boolean;
@@ -18,7 +20,7 @@ export const api = axios.create({
 
 // Request interceptor — gắn JWT access token vào header
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem("accessToken");
+  const token = getAccessToken();
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -30,9 +32,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // TODO: gọi endpoint /auth/refresh để lấy access token mới
-      // Hoặc redirect về /login
-      localStorage.removeItem("accessToken");
+      clearTokens();
+      if (location.pathname !== "/login") {
+        location.assign("/login");
+      }
     }
     return Promise.reject(error);
   }

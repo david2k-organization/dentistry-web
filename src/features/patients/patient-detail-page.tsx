@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,10 @@ import { getPatient } from "@/features/patients/api";
 import { formatDate, genderLabels } from "@/features/patients/format";
 import type { Patient } from "@/features/patients/types";
 
-export const Route = createFileRoute("/patients/$patientId")({
-  component: PatientDetailPage,
-});
+const routeApi = getRouteApi("/_authenticated/patients/$patientId");
 
 export function PatientDetailPage() {
-  const { patientId } = Route.useParams();
+  const { patientId } = routeApi.useParams();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

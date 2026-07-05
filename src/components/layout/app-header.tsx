@@ -1,4 +1,5 @@
 import { Bell, LogOut, Settings, User } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,8 +11,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { clearTokens } from "@/features/auth/auth-storage";
 
 export function AppHeader() {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    clearTokens();
+    navigate({ to: "/login" });
+  };
+
   return (
     <header className="flex h-16 shrink-0 items-center justify-end gap-1 border-b border-border bg-background px-4">
       {/* Thông báo */}
@@ -62,7 +71,7 @@ export function AppHeader() {
             Cài đặt
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">
+          <DropdownMenuItem variant="destructive" onSelect={handleLogout}>
             <LogOut />
             Đăng xuất
           </DropdownMenuItem>

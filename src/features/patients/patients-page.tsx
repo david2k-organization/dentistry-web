@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { AxiosError } from "axios";
 
@@ -9,10 +8,6 @@ import { DeletePatientDialog } from "@/features/patients/delete-patient-dialog";
 import { PatientFormDialog } from "@/features/patients/patient-form-dialog";
 import { PatientTable } from "@/features/patients/patient-table";
 import type { Patient } from "@/features/patients/types";
-
-export const Route = createFileRoute("/patients/")({
-  component: PatientsPage,
-});
 
 export function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
