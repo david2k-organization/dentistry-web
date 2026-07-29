@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
-
-import { AppHeader } from "./app-header";
-import { AppSidebar } from "./app-sidebar";
+import { AppHeader } from "./AppHeader";
+import { AppSidebar } from "./AppSidebar";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
