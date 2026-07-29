@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { isAuthenticated } from "@/features/auth/auth-storage";
-import { LoginPage } from "@/features/auth/login-page";
+import { LoginPage } from "@/features/auth/LoginPage";
 
 const loginSearchSchema = z.object({
   redirect: z.string().optional(),

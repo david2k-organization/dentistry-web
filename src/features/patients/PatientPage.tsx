@@ -4,9 +4,9 @@ import { AxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
 import { deletePatient, getPatients } from "@/features/patients/api";
-import { DeletePatientDialog } from "@/features/patients/delete-patient-dialog";
-import { PatientFormDialog } from "@/features/patients/patient-form-dialog";
-import { PatientTable } from "@/features/patients/patient-table";
+import { DeletePatientDialog } from "@/features/patients/DeletePatientDialog";
+import { PatientFormDialog } from "@/features/patients/PatientFormDialog";
+import { PatientTable } from "@/features/patients/PatientTable";
 import type { Patient } from "@/features/patients/types";
 
 export function PatientsPage() {
@@ -15,6 +15,7 @@ export function PatientsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [patientPendingDelete, setPatientPendingDelete] = useState<Patient | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -37,8 +38,24 @@ export function PatientsPage() {
     });
   }, [loadPatients]);
 
-  const handleCreated = (patient: Patient) => {
-    setPatients((prev) => [patient, ...prev]);
+  const handleOpenCreate = () => {
+    setEditingPatient(null);
+    setFormOpen(true);
+  };
+
+  const handleRequestEdit = (patient: Patient) => {
+    setEditingPatient(patient);
+    setFormOpen(true);
+  };
+
+  const handleSaved = (patient: Patient) => {
+    setPatients((prev) => {
+      const index = prev.findIndex((p) => p.id === patient.id);
+      if (index === -1) return [patient, ...prev];
+      const next = [...prev];
+      next[index] = patient;
+      return next;
+    });
   };
 
   const handleConfirmDelete = async () => {
@@ -66,7 +83,7 @@ export function PatientsPage() {
           <h1 className="text-2xl font-bold">Bệnh nhân</h1>
           <p className="text-muted-foreground">Quản lý danh sách bệnh nhân của phòng khám.</p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
+        <Button onClick={handleOpenCreate}>
           <Plus data-icon="inline-start" />
           Thêm bệnh nhân
         </Button>
@@ -77,10 +94,16 @@ export function PatientsPage() {
       <PatientTable
         patients={patients}
         loading={loading}
+        onRequestEdit={handleRequestEdit}
         onRequestDelete={setPatientPendingDelete}
       />
 
-      <PatientFormDialog open={formOpen} onOpenChange={setFormOpen} onCreated={handleCreated} />
+      <PatientFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        patient={editingPatient}
+        onSaved={handleSaved}
+      />
 
       <DeletePatientDialog
         patient={patientPendingDelete}

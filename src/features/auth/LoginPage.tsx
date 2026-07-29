@@ -1,7 +1,7 @@
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LoginForm } from "@/features/auth/login-form";
+import { LoginForm } from "@/features/auth/LoginForm";
 
 const routeApi = getRouteApi("/(auth)/login");
 

@@ -22,3 +22,5 @@ export type CreatePatientInput = {
   gender?: Gender;
   notes?: string;
 };
+
+export type UpdatePatientInput = Partial<CreatePatientInput>;

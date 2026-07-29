@@ -1,6 +1,6 @@
 import { createColumnHelper } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import { Eye, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { formatDate, genderLabels } from "./format";
@@ -8,7 +8,10 @@ import type { Patient } from "./types";
 
 const columnHelper = createColumnHelper<Patient>();
 
-export function createPatientColumns(onRequestDelete: (patient: Patient) => void) {
+export function createPatientColumns(
+  onRequestEdit: (patient: Patient) => void,
+  onRequestDelete: (patient: Patient) => void
+) {
   return [
     columnHelper.accessor("fullName", {
       header: "Họ và tên",
@@ -60,6 +63,14 @@ export function createPatientColumns(onRequestDelete: (patient: Patient) => void
               <Link to="/patients/$patientId" params={{ patientId: patient.id }}>
                 <Eye />
               </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Sửa bệnh nhân"
+              onClick={() => onRequestEdit(patient)}
+            >
+              <Pencil />
             </Button>
             <Button
               variant="ghost"

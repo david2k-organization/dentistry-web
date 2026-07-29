@@ -15,11 +15,20 @@ import type { Patient } from "./types";
 type PatientTableProps = {
   patients: Patient[];
   loading?: boolean;
+  onRequestEdit: (patient: Patient) => void;
   onRequestDelete: (patient: Patient) => void;
 };
 
-export function PatientTable({ patients, loading, onRequestDelete }: PatientTableProps) {
-  const columns = useMemo(() => createPatientColumns(onRequestDelete), [onRequestDelete]);
+export function PatientTable({
+  patients,
+  loading,
+  onRequestEdit,
+  onRequestDelete,
+}: PatientTableProps) {
+  const columns = useMemo(
+    () => createPatientColumns(onRequestEdit, onRequestDelete),
+    [onRequestEdit, onRequestDelete]
+  );
 
   const table = useReactTable({
     data: patients,
@@ -54,7 +63,7 @@ export function PatientTable({ patients, loading, onRequestDelete }: PatientTabl
                 Đang tải dữ liệu...
               </TableCell>
             </TableRow>
-          ) : table.getRowModel().rows.length === 0 ? (
+          ) : table.getRowModel()?.rows?.length === 0 ? (
             <TableRow>
               <TableCell
                 colSpan={columns.length}
@@ -64,7 +73,7 @@ export function PatientTable({ patients, loading, onRequestDelete }: PatientTabl
               </TableCell>
             </TableRow>
           ) : (
-            table.getRowModel().rows.map((row) => (
+            table.getRowModel()?.rows?.map((row) => (
               <TableRow key={row.id}>
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>

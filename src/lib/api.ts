@@ -1,8 +1,6 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
-
 import { clearTokens, getAccessToken } from "@/features/auth/auth-storage";
 
-// Envelope response chung của backend (TransformInterceptor)
 export type ApiEnvelope<T> = {
   success: boolean;
   statusCode: number;
@@ -38,5 +36,5 @@ api.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );

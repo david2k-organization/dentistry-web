@@ -38,3 +38,15 @@ export function isoToDateInputValue(iso: string | null): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+// "YYYY-MM-DD" -> Date theo giờ local (tránh lệch ngày do parse UTC của new Date(string))
+export function dateOnlyStringToDate(dateOnly: string): Date {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+// Date -> "YYYY-MM-DD" theo giờ local, dùng cho react-hook-form field và Calendar
+export function dateToDateOnlyString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
