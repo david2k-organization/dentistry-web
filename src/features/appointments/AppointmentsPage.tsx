@@ -21,8 +21,8 @@ const LEGEND: ApptStatus[] = ["booked", "arrived", "in_progress", "done"];
 // Khung giờ làm việc & kích thước lưới
 const OPEN_HOUR = 8;
 const CLOSE_HOUR = 18;
-const SLOT_MIN = 30;
-const SLOT_H = 34; // px cho mỗi 30 phút
+const SLOT_MIN = 15;
+const SLOT_H = 20; // px cho mỗi SLOT_MIN phút
 const HEAD_H = 34;
 const SLOT_COUNT = ((CLOSE_HOUR - OPEN_HOUR) * 60) / SLOT_MIN;
 const BODY_H = SLOT_COUNT * SLOT_H;
