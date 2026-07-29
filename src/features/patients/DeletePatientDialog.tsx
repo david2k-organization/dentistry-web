@@ -1,13 +1,14 @@
+import { Trash2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { Patient } from "./types";
 
 type DeletePatientDialogProps = {
@@ -24,30 +25,32 @@ export function DeletePatientDialog({
   deleting,
 }: DeletePatientDialogProps) {
   return (
-    <AlertDialog open={!!patient} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Xóa bệnh nhân</AlertDialogTitle>
-          <AlertDialogDescription>
-            Bạn có chắc chắn muốn xóa bệnh nhân{" "}
-            <span className="font-medium text-foreground">{patient?.fullName}</span>?
-            Hành động này không thể hoàn tác.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={deleting}>Hủy</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
+    <Dialog open={!!patient} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <div className="grid size-[42px] place-items-center rounded-xl bg-[#fbeeea] text-[#a4553a]">
+          <Trash2 className="size-5" />
+        </div>
+        <DialogHeader className="items-start text-left">
+          <DialogTitle>Xoá hồ sơ {patient?.fullName}?</DialogTitle>
+          <DialogDescription className="text-[13px] leading-relaxed text-[#5c7a78]">
+            Toàn bộ thông tin và ghi chú của hồ sơ này sẽ bị xoá. Hành động này không thể hoàn
+            tác.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter className="sm:justify-start">
+          <Button
+            className="bg-[#a4553a] text-white hover:bg-[#8a4530]"
             disabled={deleting}
-            onClick={(e) => {
-              e.preventDefault();
-              onConfirm();
-            }}
+            onClick={onConfirm}
           >
-            {deleting ? "Đang xóa..." : "Xóa"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+            {deleting ? "Đang xoá..." : "Xoá hồ sơ"}
+          </Button>
+          <Button variant="outline" disabled={deleting} onClick={() => onOpenChange(false)}>
+            Giữ lại
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

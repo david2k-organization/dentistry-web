@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { DataTable } from "@/components/ui/DataTable";
 import { createServiceCategoryColumns } from "./columns";
@@ -9,6 +9,7 @@ type ServiceCategoryTableProps = {
   loading?: boolean;
   onRequestEdit: (category: ServiceCategory) => void;
   onRequestDelete: (category: ServiceCategory) => void;
+  actions?: ReactNode;
 };
 
 export function ServiceCategoryTable({
@@ -16,6 +17,7 @@ export function ServiceCategoryTable({
   loading,
   onRequestEdit,
   onRequestDelete,
+  actions,
 }: ServiceCategoryTableProps) {
   const columns = useMemo(
     () => createServiceCategoryColumns(onRequestEdit, onRequestDelete),
@@ -30,6 +32,7 @@ export function ServiceCategoryTable({
       getRowId={(row) => row.id}
       title="Danh mục dịch vụ"
       countLabel={(n) => `${n} danh mục`}
+      actions={actions}
       emptyMessage="Chưa có danh mục dịch vụ nào."
     />
   );

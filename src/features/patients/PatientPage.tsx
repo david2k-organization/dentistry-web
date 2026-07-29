@@ -77,18 +77,7 @@ export function PatientsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Bệnh nhân</h1>
-          <p className="text-muted-foreground">Quản lý danh sách bệnh nhân của phòng khám.</p>
-        </div>
-        <Button onClick={handleOpenCreate}>
-          <Plus data-icon="inline-start" />
-          Thêm bệnh nhân
-        </Button>
-      </div>
-
+    <div className="flex flex-col gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <PatientTable
@@ -96,6 +85,12 @@ export function PatientsPage() {
         loading={loading}
         onRequestEdit={handleRequestEdit}
         onRequestDelete={setPatientPendingDelete}
+        actions={
+          <Button onClick={handleOpenCreate} className="gap-1.5">
+            <Plus className="size-[17px]" />
+            Thêm bệnh nhân
+          </Button>
+        }
       />
 
       <PatientFormDialog

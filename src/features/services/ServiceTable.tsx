@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { DataTable } from "@/components/ui/DataTable";
 import { createServiceColumns } from "./columns";
@@ -9,6 +9,7 @@ type ServiceTableProps = {
   loading?: boolean;
   onRequestEdit: (service: Service) => void;
   onRequestDelete: (service: Service) => void;
+  actions?: ReactNode;
 };
 
 export function ServiceTable({
@@ -16,6 +17,7 @@ export function ServiceTable({
   loading,
   onRequestEdit,
   onRequestDelete,
+  actions,
 }: ServiceTableProps) {
   const columns = useMemo(
     () => createServiceColumns(onRequestEdit, onRequestDelete),
@@ -30,6 +32,7 @@ export function ServiceTable({
       getRowId={(row) => row.id}
       title="Danh sách dịch vụ"
       countLabel={(n) => `${n} dịch vụ`}
+      actions={actions}
       emptyMessage="Chưa có dịch vụ nào."
     />
   );

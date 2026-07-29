@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   type ColumnDef,
   type SortingState,
@@ -48,6 +48,8 @@ type DataTableProps<TData> = {
   title?: string;
   /** Nhãn số lượng bên cạnh tiêu đề, ví dụ (n) => `${n} hồ sơ`. */
   countLabel?: (total: number) => string;
+  /** Nút hành động (VD: "Thêm bệnh nhân") ở cuối thanh tiêu đề. */
+  actions?: ReactNode;
   /** Số dòng mỗi trang ban đầu (mặc định 20). */
   pageSize?: number;
   /** Các lựa chọn số dòng/trang (mặc định 20/50/100). */
@@ -63,6 +65,7 @@ export function DataTable<TData>({
   onRowClick,
   title,
   countLabel,
+  actions,
   pageSize = 20,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
 }: DataTableProps<TData>) {
@@ -89,12 +92,14 @@ export function DataTable<TData>({
 
   return (
     <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-      {title && (
+      {(title || actions) && (
         <div className="flex items-center gap-3 border-b border-[#e6efee] px-[18px] py-[15px]">
-          <div className="text-[14.5px] font-semibold text-foreground">{title}</div>
+          {title && <div className="text-[14.5px] font-semibold text-foreground">{title}</div>}
           {countLabel && (
             <div className="text-xs text-muted-foreground">{countLabel(total)}</div>
           )}
+          <div className="flex-1" />
+          {actions}
         </div>
       )}
 

@@ -15,6 +15,36 @@ export function formatDate(iso: string | null): string {
   }).format(new Date(iso));
 }
 
+/** Chữ cái đầu của (tối đa) 2 từ cuối trong họ tên, dùng cho avatar tròn. */
+export function getInitials(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  return words
+    .slice(-2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+const vnd = new Intl.NumberFormat("vi-VN");
+
+/** Định dạng số tiền VNĐ, ví dụ 400000 -> "400.000 đ". */
+export function formatCurrency(amount: number): string {
+  return `${vnd.format(amount)} đ`;
+}
+
+/** Tuổi tính từ ngày sinh, hoặc null nếu chưa có ngày sinh. */
+export function calculateAge(dateOfBirth: string | null): number | null {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const beforeBirthdayThisYear =
+    now.getMonth() < dob.getMonth() ||
+    (now.getMonth() === dob.getMonth() && now.getDate() < dob.getDate());
+  if (beforeBirthdayThisYear) age -= 1;
+  return age;
+}
+
 // Input type="date" trả về "YYYY-MM-DD" — chuyển sang ISO datetime kèm offset
 // theo đúng định dạng backend yêu cầu (z.iso.datetime({ offset: true })).
 export function dateOnlyToIsoWithOffset(dateOnly: string): string {

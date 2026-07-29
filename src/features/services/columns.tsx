@@ -1,7 +1,7 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Syringe, Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { iconActionButtonClass } from "@/lib/utils";
 import { formatDuration, formatPrice, unitLabels } from "./format";
 import type { Service } from "./types";
 
@@ -12,26 +12,22 @@ export function createServiceColumns(
   onRequestDelete: (service: Service) => void
 ) {
   return [
-    columnHelper.accessor("code", {
-      header: "Mã",
-      cell: (info) => (
-        <span className="font-mono text-sm text-muted-foreground">{info.getValue()}</span>
-      ),
-    }),
     columnHelper.accessor("name", {
       header: "Tên dịch vụ",
       cell: (info) => {
         const service = info.row.original;
         return (
-          <div className="flex items-center gap-2.5">
-            <span
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ background: service.color ?? "#cfe0df" }}
-            />
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div
+              className="grid size-8 shrink-0 place-items-center rounded-full text-white"
+              style={{ background: service.color ?? "#9fb3b1" }}
+            >
+              <Syringe className="size-4" />
+            </div>
             <div className="min-w-0 leading-tight">
-              <div className="font-medium text-foreground">{service.name}</div>
+              <div className="truncate font-medium text-foreground">{service.name}</div>
               <div className="text-[11.5px] text-muted-foreground">
-                {service.category?.name ?? "—"}
+                {service.category?.name ?? "—"} · {service.code}
               </div>
             </div>
           </div>
@@ -49,13 +45,13 @@ export function createServiceColumns(
     columnHelper.accessor("unit", {
       header: "Đơn vị",
       cell: (info) => (
-        <span className="text-muted-foreground">{unitLabels[info.getValue()]}</span>
+        <span className="text-[#4a6664]">{unitLabels[info.getValue()]}</span>
       ),
     }),
     columnHelper.accessor("durationMinutes", {
       header: "Thời lượng",
       cell: (info) => (
-        <span className="tabular-nums text-muted-foreground">
+        <span className="tabular-nums text-[#4a6664]">
           {formatDuration(info.getValue())}
         </span>
       ),
@@ -64,11 +60,11 @@ export function createServiceColumns(
       header: "Trạng thái",
       cell: (info) =>
         info.getValue() ? (
-          <span className="inline-flex items-center rounded-full bg-[#eef6f1] px-2 py-0.5 text-xs font-medium text-[#3f7a55]">
+          <span className="inline-flex items-center rounded-full bg-[#eef6f1] px-2.5 py-1 text-[11.5px] font-medium text-[#3f7a55]">
             Đang hoạt động
           </span>
         ) : (
-          <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground">
             Đã ẩn
           </span>
         ),
@@ -79,24 +75,23 @@ export function createServiceColumns(
       cell: (info) => {
         const service = info.row.original;
         return (
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Sửa dịch vụ"
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              title="Sửa dịch vụ"
               onClick={() => onRequestEdit(service)}
+              className={iconActionButtonClass()}
             >
-              <Pencil />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Xóa dịch vụ"
-              className="hover:bg-destructive/10 hover:text-destructive"
+              <Pencil className="size-[17px]" />
+            </button>
+            <button
+              type="button"
+              title="Xoá dịch vụ"
               onClick={() => onRequestDelete(service)}
+              className={iconActionButtonClass("danger")}
             >
-              <Trash2 />
-            </Button>
+              <Trash2 className="size-[17px]" />
+            </button>
           </div>
         );
       },

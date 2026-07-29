@@ -72,7 +72,10 @@ export function AppHeader() {
       </div>
 
       {/* Nút đặt hẹn */}
-      <Button className="gap-1.5">
+      <Button
+        className="gap-1.5"
+        onClick={() => navigate({ to: "/appointments", search: { newAppt: true } })}
+      >
         <Plus data-icon="inline-start" />
         Đặt hẹn
       </Button>

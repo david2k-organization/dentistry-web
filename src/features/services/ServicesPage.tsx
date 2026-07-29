@@ -88,20 +88,7 @@ export function ServicesPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Dịch vụ</h1>
-          <p className="text-muted-foreground">
-            Quản lý bảng giá và dịch vụ nha khoa của phòng khám.
-          </p>
-        </div>
-        <Button onClick={handleOpenCreate} disabled={categories.length === 0}>
-          <Plus data-icon="inline-start" />
-          Thêm dịch vụ
-        </Button>
-      </div>
-
+    <div className="flex flex-col gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
       {!loading && categories.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -114,6 +101,12 @@ export function ServicesPage() {
         loading={loading}
         onRequestEdit={handleRequestEdit}
         onRequestDelete={setServicePendingDelete}
+        actions={
+          <Button onClick={handleOpenCreate} disabled={categories.length === 0} className="gap-1.5">
+            <Plus className="size-[17px]" />
+            Thêm dịch vụ
+          </Button>
+        }
       />
 
       <ServiceFormDialog

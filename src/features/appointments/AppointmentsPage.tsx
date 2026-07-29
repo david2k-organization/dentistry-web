@@ -1,50 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { getPatients } from "@/features/patients/api";
+import type { Patient } from "@/features/patients/types";
+import { getServices } from "@/features/services/api";
+import type { Service } from "@/features/services/types";
 import { AppointmentDetailDialog } from "./AppointmentDetailDialog";
+import {
+  BODY_H,
+  HEAD_H,
+  LEGEND,
+  OPEN_HOUR,
+  SLOT_COUNT,
+  SLOT_H,
+  STATUS,
+  addMinutes,
+  days,
+  hourLabels,
+  toMinutes,
+  type Appt,
+} from "./constants";
+import { NewAppointmentDialog, type NewAppointmentInput } from "./NewAppointmentDialog";
 
-type ApptStatus = "booked" | "arrived" | "in_progress" | "done" | "cancelled";
-
-const STATUS: Record<
-  ApptStatus,
-  { label: string; bg: string; fg: string; fgSoft: string; dot: string }
-> = {
-  booked: { label: "Đã hẹn", bg: "#eef4f4", fg: "#5c7a78", fgSoft: "#7e9997", dot: "#b8cbc9" },
-  arrived: { label: "Đã đến", bg: "#e7f1f0", fg: "#0f7a73", fgSoft: "#4a8f89", dot: "#0f7a73" },
-  in_progress: { label: "Đang khám", bg: "#fdf3e8", fg: "#9a6524", fgSoft: "#b98a4a", dot: "#d99a3f" },
-  done: { label: "Hoàn tất", bg: "#eef6f1", fg: "#3f7a55", fgSoft: "#6b9a7d", dot: "#5da177" },
-  cancelled: { label: "Huỷ hẹn", bg: "#fbeeea", fg: "#a4553a", fgSoft: "#c2765b", dot: "#c2765b" },
-};
-
-const LEGEND: ApptStatus[] = ["booked", "arrived", "in_progress", "done"];
-
-// Khung giờ làm việc & kích thước lưới
-const OPEN_HOUR = 8;
-const CLOSE_HOUR = 18;
-const SLOT_MIN = 15;
-const SLOT_H = 20; // px cho mỗi SLOT_MIN phút
-const HEAD_H = 34;
-const SLOT_COUNT = ((CLOSE_HOUR - OPEN_HOUR) * 60) / SLOT_MIN;
-const BODY_H = SLOT_COUNT * SLOT_H;
-
-const days = [
-  { name: "T2", date: "27/07" },
-  { name: "T3", date: "28/07" },
-  { name: "T4", date: "29/07", today: true },
-  { name: "T5", date: "30/07" },
-  { name: "T6", date: "31/07" },
-  { name: "T7", date: "01/08" },
-];
-
-type Appt = {
-  id: string;
-  day: number; // chỉ số cột (0-5)
-  start: string; // "HH:MM"
-  duration: number; // phút
-  patient: string;
-  service: string;
-  status: ApptStatus;
-};
+const routeApi = getRouteApi("/_authenticated/appointments/");
 
 const initialAppts: Appt[] = [
   { id: "a1", day: 0, start: "09:00", duration: 45, patient: "Hoàng Anh Tú", service: "Khám tổng quát", status: "done" },
@@ -64,22 +44,46 @@ const initialAppts: Appt[] = [
   { id: "a15", day: 5, start: "09:30", duration: 60, patient: "Tạ Quang Huy", service: "Nhổ răng khôn", status: "booked" },
 ];
 
-function toMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return (h - OPEN_HOUR) * 60 + m;
-}
-
-function addMinutes(time: string, mins: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + mins;
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
-const hourLabels = Array.from({ length: CLOSE_HOUR - OPEN_HOUR + 1 }, (_, i) => OPEN_HOUR + i);
-
 export function AppointmentsPage() {
   const [appts, setAppts] = useState<Appt[]>(initialAppts);
   const [selected, setSelected] = useState<Appt | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+
+  const [newOpen, setNewOpen] = useState(false);
+  const [newPreset, setNewPreset] = useState<{ day: number; start: string } | null>(null);
+
+  const navigate = useNavigate();
+  const { newAppt } = routeApi.useSearch();
+
+  useEffect(() => {
+    Promise.all([getPatients(), getServices()])
+      .then(([patientList, serviceList]) => {
+        setPatients(patientList);
+        setServices(serviceList);
+      })
+      .catch(() => {
+        toast.error("Không thể tải danh sách bệnh nhân / dịch vụ.");
+      });
+  }, []);
+
+  // Nút "Đặt hẹn" ở header điều hướng tới đây với ?newAppt=true — mở dialog ngay khi
+  // phát hiện cờ này trong lúc render, rồi dọn query string qua một effect riêng
+  // (effect đó chỉ gọi navigate, không setState, nên không kích rule set-state-in-effect).
+  const [handledNewAppt, setHandledNewAppt] = useState(false);
+  if (newAppt && !handledNewAppt) {
+    setHandledNewAppt(true);
+    setNewPreset(null);
+    setNewOpen(true);
+  } else if (!newAppt && handledNewAppt) {
+    setHandledNewAppt(false);
+  }
+
+  useEffect(() => {
+    if (newAppt) {
+      navigate({ to: "/appointments", search: {}, replace: true });
+    }
+  }, [newAppt, navigate]);
 
   const handleCheckIn = () => {
     if (!selected) return;
@@ -97,127 +101,177 @@ export function AppointmentsPage() {
     setSelected(null);
   };
 
+  const handleCellClick = (dayIndex: number, slotIndex: number) => {
+    const start = addMinutes(`${String(OPEN_HOUR).padStart(2, "0")}:00`, slotIndex * 15);
+    setNewPreset({ day: dayIndex, start });
+    setNewOpen(true);
+  };
+
+  const handleCreateAppt = (input: NewAppointmentInput) => {
+    setAppts((prev) => [
+      ...prev,
+      {
+        id: `a${Date.now()}`,
+        day: input.day,
+        start: input.start,
+        duration: input.duration,
+        patient: input.patient,
+        service: input.service,
+        status: "booked",
+      },
+    ]);
+    toast.success(`Đã đặt hẹn ${input.patient} · ${days[input.day].name} ${input.start}`);
+  };
+
   return (
-    <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-      {/* Header tuần + chú thích */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e6efee] px-[18px] py-3.5">
-        <div className="text-[14.5px] font-semibold text-foreground">Tuần 27/07 – 01/08/2026</div>
-        <div className="text-xs text-muted-foreground">Bấm vào lịch hẹn để xem chi tiết</div>
-        <div className="flex-1" />
-        <div className="flex flex-wrap gap-3.5 text-[11.5px] text-muted-foreground">
-          {LEGEND.map((s) => (
-            <div key={s} className="flex items-center gap-1.5">
-              <span className="size-[9px] rounded-[3px]" style={{ background: STATUS[s].dot }} />
-              {STATUS[s].label}
-            </div>
-          ))}
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Button
+          onClick={() => {
+            setNewPreset(null);
+            setNewOpen(true);
+          }}
+        >
+          Đặt hẹn mới
+        </Button>
       </div>
 
-      {/* Lưới lịch */}
-      <div className="overflow-x-auto">
-        <div className="flex min-w-[860px]">
-          {/* Cột giờ */}
-          <div className="w-[62px] shrink-0 border-r border-[#eaf1f0]">
-            <div style={{ height: HEAD_H }} />
-            <div className="relative" style={{ height: BODY_H }}>
-              {hourLabels.map((h) => (
-                <div
-                  key={h}
-                  className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-[#9fb3b1]"
-                  style={{ top: ((h - OPEN_HOUR) * 60 * SLOT_H) / SLOT_MIN }}
-                >
-                  {String(h).padStart(2, "0")}:00
-                </div>
-              ))}
-            </div>
+      <div className="overflow-hidden rounded-[14px] border border-border bg-card">
+        {/* Header tuần + chú thích */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e6efee] px-[18px] py-3.5">
+          <div className="text-[14.5px] font-semibold text-foreground">Tuần 27/07 – 01/08/2026</div>
+          <div className="text-xs text-muted-foreground">
+            Bấm vào ô trống để đặt hẹn, bấm vào lịch hẹn để xem chi tiết
           </div>
-
-          {/* Cột ngày */}
-          {days.map((d, dayIndex) => (
-            <div key={d.name} className="min-w-0 flex-1 border-r border-[#eaf1f0] last:border-r-0">
-              <div
-                className="flex items-center justify-center gap-1.5 border-b border-[#eaf1f0]"
-                style={{ height: HEAD_H, background: d.today ? "#e7f1f0" : undefined }}
-              >
-                <span
-                  className="text-[12.5px] font-semibold"
-                  style={{ color: d.today ? "#0f7a73" : "#16302e" }}
-                >
-                  {d.name}
-                </span>
-                <span className="text-[11.5px] text-[#8aa3a1]">{d.date}</span>
+          <div className="flex-1" />
+          <div className="flex flex-wrap gap-3.5 text-[11.5px] text-muted-foreground">
+            {LEGEND.map((s) => (
+              <div key={s} className="flex items-center gap-1.5">
+                <span className="size-[9px] rounded-[3px]" style={{ background: STATUS[s].dot }} />
+                {STATUS[s].label}
               </div>
+            ))}
+          </div>
+        </div>
 
+        {/* Lưới lịch */}
+        <div className="overflow-x-auto">
+          <div className="flex min-w-[860px]">
+            {/* Cột giờ */}
+            <div className="w-[62px] shrink-0 border-r border-[#eaf1f0]">
+              <div style={{ height: HEAD_H }} />
               <div className="relative" style={{ height: BODY_H }}>
-                {/* Đường kẻ theo slot */}
-                {Array.from({ length: SLOT_COUNT }).map((_, i) => (
+                {hourLabels.map((h) => (
                   <div
-                    key={i}
-                    className="border-b border-[#eaf1f0] transition-colors hover:bg-[#f4f9f8]"
-                    style={{ height: SLOT_H }}
-                  />
+                    key={h}
+                    className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-[#9fb3b1]"
+                    style={{ top: ((h - OPEN_HOUR) * 60 * SLOT_H) / 15 }}
+                  >
+                    {String(h).padStart(2, "0")}:00
+                  </div>
                 ))}
-
-                {/* Khối lịch hẹn */}
-                {appts
-                  .filter((a) => a.day === dayIndex)
-                  .map((a) => {
-                    const s = STATUS[a.status];
-                    const top = (toMinutes(a.start) * SLOT_H) / SLOT_MIN;
-                    const height = (a.duration * SLOT_H) / SLOT_MIN - 3;
-                    return (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => setSelected(a)}
-                        title={`${a.patient} · ${a.service}`}
-                        className="absolute right-[3px] left-[3px] cursor-pointer overflow-hidden rounded-lg border px-[7px] py-[5px] text-left leading-tight transition-[filter] hover:brightness-[0.97]"
-                        style={{
-                          top,
-                          height,
-                          background: s.bg,
-                          borderColor: s.bg,
-                          borderLeft: `3px solid ${s.dot}`,
-                        }}
-                      >
-                        <div className="truncate text-[11.5px] font-semibold" style={{ color: s.fg }}>
-                          {a.patient}
-                        </div>
-                        <div className="truncate text-[10.5px]" style={{ color: s.fgSoft }}>
-                          {a.start} · {a.service}
-                        </div>
-                      </button>
-                    );
-                  })}
               </div>
             </div>
-          ))}
+
+            {/* Cột ngày */}
+            {days.map((d, dayIndex) => (
+              <div key={d.name} className="min-w-0 flex-1 border-r border-[#eaf1f0] last:border-r-0">
+                <div
+                  className="flex items-center justify-center gap-1.5 border-b border-[#eaf1f0]"
+                  style={{ height: HEAD_H, background: d.today ? "#e7f1f0" : undefined }}
+                >
+                  <span
+                    className="text-[12.5px] font-semibold"
+                    style={{ color: d.today ? "#0f7a73" : "#16302e" }}
+                  >
+                    {d.name}
+                  </span>
+                  <span className="text-[11.5px] text-[#8aa3a1]">{d.date}</span>
+                </div>
+
+                <div className="relative" style={{ height: BODY_H }}>
+                  {/* Đường kẻ theo slot — bấm để đặt hẹn mới */}
+                  {Array.from({ length: SLOT_COUNT }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleCellClick(dayIndex, i)}
+                      title="Đặt hẹn mới"
+                      className="block w-full cursor-cell border-b border-[#eaf1f0] transition-colors hover:bg-[#f4f9f8]"
+                      style={{ height: SLOT_H }}
+                    />
+                  ))}
+
+                  {/* Khối lịch hẹn */}
+                  {appts
+                    .filter((a) => a.day === dayIndex)
+                    .map((a) => {
+                      const s = STATUS[a.status];
+                      const top = (toMinutes(a.start) * SLOT_H) / 15;
+                      const height = (a.duration * SLOT_H) / 15 - 3;
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setSelected(a)}
+                          title={`${a.patient} · ${a.service}`}
+                          className="absolute right-[3px] left-[3px] cursor-pointer overflow-hidden rounded-lg border px-[7px] py-[5px] text-left leading-tight transition-[filter] hover:brightness-[0.97]"
+                          style={{
+                            top,
+                            height,
+                            background: s.bg,
+                            borderColor: s.bg,
+                            borderLeft: `3px solid ${s.dot}`,
+                          }}
+                        >
+                          <div className="truncate text-[11.5px] font-semibold" style={{ color: s.fg }}>
+                            {a.patient}
+                          </div>
+                          <div className="truncate text-[10.5px]" style={{ color: s.fgSoft }}>
+                            {a.start} · {a.service}
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+
+        <AppointmentDetailDialog
+          open={selected != null}
+          onOpenChange={(open) => !open && setSelected(null)}
+          title={selected?.patient ?? ""}
+          subtitle={
+            selected
+              ? `${days[selected.day].name} ${days[selected.day].date} · ${selected.start}–${addMinutes(selected.start, selected.duration)}`
+              : ""
+          }
+          status={selected ? STATUS[selected.status] : STATUS.booked}
+          fields={
+            selected
+              ? [
+                  { label: "Dịch vụ", value: selected.service },
+                  { label: "Thời lượng", value: `${selected.duration} phút` },
+                  { label: "Bác sĩ", value: "BS. Lê Minh Anh" },
+                  { label: "Ghế", value: "Ghế 1" },
+                ]
+              : []
+          }
+          onCheckIn={handleCheckIn}
+          onCancel={handleCancel}
+        />
       </div>
 
-      <AppointmentDetailDialog
-        open={selected != null}
-        onOpenChange={(open) => !open && setSelected(null)}
-        title={selected?.patient ?? ""}
-        subtitle={
-          selected
-            ? `${days[selected.day].name} ${days[selected.day].date} · ${selected.start}–${addMinutes(selected.start, selected.duration)}`
-            : ""
-        }
-        status={selected ? STATUS[selected.status] : STATUS.booked}
-        fields={
-          selected
-            ? [
-                { label: "Dịch vụ", value: selected.service },
-                { label: "Thời lượng", value: `${selected.duration} phút` },
-                { label: "Bác sĩ", value: "BS. Lê Minh Anh" },
-                { label: "Ghế", value: "Ghế 1" },
-              ]
-            : []
-        }
-        onCheckIn={handleCheckIn}
-        onCancel={handleCancel}
+      <NewAppointmentDialog
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        patients={patients}
+        services={services}
+        presetDay={newPreset?.day}
+        presetStart={newPreset?.start}
+        onCreate={handleCreateAppt}
       />
     </div>
   );

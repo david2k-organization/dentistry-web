@@ -80,20 +80,7 @@ export function ServiceCategoriesPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Danh mục dịch vụ</h1>
-          <p className="text-muted-foreground">
-            Quản lý danh mục dịch vụ nha khoa của phòng khám.
-          </p>
-        </div>
-        <Button onClick={handleOpenCreate}>
-          <Plus data-icon="inline-start" />
-          Thêm danh mục
-        </Button>
-      </div>
-
+    <div className="flex flex-col gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <ServiceCategoryTable
@@ -101,6 +88,12 @@ export function ServiceCategoriesPage() {
         loading={loading}
         onRequestEdit={handleRequestEdit}
         onRequestDelete={setCategoryPendingDelete}
+        actions={
+          <Button onClick={handleOpenCreate} className="gap-1.5">
+            <Plus className="size-[17px]" />
+            Thêm danh mục
+          </Button>
+        }
       />
 
       <ServiceCategoryFormDialog
