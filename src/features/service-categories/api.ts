@@ -1,13 +1,25 @@
-import { api, type ApiEnvelope } from "@/lib/api";
+import {
+  api,
+  listQuery,
+  normalizePaginated,
+  type ApiEnvelope,
+  type ListParams,
+  type Paginated,
+} from "@/lib/api";
 import type {
   CreateServiceCategoryInput,
   ServiceCategory,
   UpdateServiceCategoryInput,
 } from "./types";
 
-export async function getServiceCategories(): Promise<ServiceCategory[]> {
-  const res = await api.get<ApiEnvelope<ServiceCategory[]>>("/service-categories");
-  return res.data.data;
+export async function getServiceCategories(
+  params: ListParams = {}
+): Promise<Paginated<ServiceCategory>> {
+  const res = await api.get<ApiEnvelope<Paginated<ServiceCategory> | ServiceCategory[]>>(
+    "/service-categories",
+    { params: listQuery(params) }
+  );
+  return normalizePaginated(res.data);
 }
 
 export async function getServiceCategory(id: string): Promise<ServiceCategory | null> {

@@ -10,6 +10,54 @@ export type ApiEnvelope<T> = {
   path?: string;
 };
 
+export type PaginationMeta = {
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/** Payload cho endpoint danh sách có phân trang phía server: `{ data, meta }`. */
+export type Paginated<T> = {
+  data: T[];
+  meta: PaginationMeta;
+};
+
+export type ListParams = {
+  searchKey?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+/** Chuẩn hóa query cho endpoint danh sách; bỏ qua field rỗng/không truyền. */
+export function listQuery(params: ListParams = {}): Record<string, string | number> {
+  const query: Record<string, string | number> = {};
+  if (params.searchKey?.trim()) query.searchKey = params.searchKey.trim();
+  if (params.page) query.page = params.page;
+  if (params.pageSize) query.pageSize = params.pageSize;
+  return query;
+}
+
+/**
+ * Chuẩn hóa payload danh sách về `{ data, meta }`, chấp nhận cả 3 kiểu response
+ * mà backend có thể trả:
+ *  1. `data: { data: T[], meta }` — đã phân trang, lồng trong `data` (như /patient).
+ *  2. `data: T[]` + `meta` cùng cấp trong envelope.
+ *  3. `data: T[]` — mảng thuần (endpoint chưa phân trang, theo docs cũ).
+ * Với kiểu 3 thì tổng số suy ra từ độ dài mảng để bảng vẫn hiển thị đúng.
+ */
+export function normalizePaginated<T>(
+  envelope: ApiEnvelope<Paginated<T> | T[]> & { meta?: PaginationMeta }
+): Paginated<T> {
+  const payload = envelope.data;
+  if (Array.isArray(payload)) {
+    const meta =
+      envelope.meta ??
+      ({ total: payload.length, page: 1, pageSize: payload.length || 20 } satisfies PaginationMeta);
+    return { data: payload, meta };
+  }
+  return payload;
+}
+
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "/api",
   withCredentials: true, // gửi cookie (cho refresh token httpOnly)

@@ -57,10 +57,10 @@ export function AppointmentsPage() {
   const { newAppt } = routeApi.useSearch();
 
   useEffect(() => {
-    Promise.all([getPatients(), getServices()])
-      .then(([patientList, serviceList]) => {
-        setPatients(patientList);
-        setServices(serviceList);
+    Promise.all([getPatients({ pageSize: 1000 }), getServices({ pageSize: 1000 })])
+      .then(([patientPage, servicePage]) => {
+        setPatients(patientPage.data);
+        setServices(servicePage.data);
       })
       .catch(() => {
         toast.error("Không thể tải danh sách bệnh nhân / dịch vụ.");
@@ -138,7 +138,7 @@ export function AppointmentsPage() {
 
       <div className="overflow-hidden rounded-[14px] border border-border bg-card">
         {/* Header tuần + chú thích */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e6efee] px-[18px] py-3.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e6efee] px-4.5 py-3.5">
           <div className="text-[14.5px] font-semibold text-foreground">Tuần 27/07 – 01/08/2026</div>
           <div className="text-xs text-muted-foreground">
             Bấm vào ô trống để đặt hẹn, bấm vào lịch hẹn để xem chi tiết
@@ -147,7 +147,7 @@ export function AppointmentsPage() {
           <div className="flex flex-wrap gap-3.5 text-[11.5px] text-muted-foreground">
             {LEGEND.map((s) => (
               <div key={s} className="flex items-center gap-1.5">
-                <span className="size-[9px] rounded-[3px]" style={{ background: STATUS[s].dot }} />
+                <span className="px-4.5 rounded-[3px]" style={{ background: STATUS[s].dot }} />
                 {STATUS[s].label}
               </div>
             ))}
@@ -156,9 +156,9 @@ export function AppointmentsPage() {
 
         {/* Lưới lịch */}
         <div className="overflow-x-auto">
-          <div className="flex min-w-[860px]">
+          <div className="flex min-w-215">
             {/* Cột giờ */}
-            <div className="w-[62px] shrink-0 border-r border-[#eaf1f0]">
+            <div className="w-15.5 shrink-0 border-r border-[#eaf1f0]">
               <div style={{ height: HEAD_H }} />
               <div className="relative" style={{ height: BODY_H }}>
                 {hourLabels.map((h) => (
@@ -215,7 +215,7 @@ export function AppointmentsPage() {
                           type="button"
                           onClick={() => setSelected(a)}
                           title={`${a.patient} · ${a.service}`}
-                          className="absolute right-[3px] left-[3px] cursor-pointer overflow-hidden rounded-lg border px-[7px] py-[5px] text-left leading-tight transition-[filter] hover:brightness-[0.97]"
+                          className="absolute right-0.75 left-0.75 cursor-pointer overflow-hidden rounded-lg border px-1.75 py-1.25 text-left leading-tight transition-[filter] hover:brightness-[0.97]"
                           style={{
                             top,
                             height,

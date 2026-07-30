@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type ComponentProps, type ReactNode } from "react";
 
 import { DataTable } from "@/components/ui/DataTable";
 import { createPatientColumns } from "./columns";
@@ -9,6 +9,7 @@ type PatientTableProps = {
   loading?: boolean;
   onRequestEdit: (patient: Patient) => void;
   onRequestDelete: (patient: Patient) => void;
+  pagination?: ComponentProps<typeof DataTable<Patient>>["manualPagination"];
   actions?: ReactNode;
 };
 
@@ -17,6 +18,7 @@ export function PatientTable({
   loading,
   onRequestEdit,
   onRequestDelete,
+  pagination,
   actions,
 }: PatientTableProps) {
   const columns = useMemo(
@@ -34,6 +36,7 @@ export function PatientTable({
       countLabel={(n) => `${n} hồ sơ`}
       actions={actions}
       emptyMessage="Chưa có bệnh nhân nào."
+      manualPagination={pagination}
     />
   );
 }

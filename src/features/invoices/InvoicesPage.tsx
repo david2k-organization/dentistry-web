@@ -51,10 +51,10 @@ export function InvoicesPage() {
   const [cancellingInvoice, setCancellingInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
-    Promise.all([getPatients(), getServices()])
-      .then(([patientList, serviceList]) => {
-        setPatients(patientList);
-        setServices(serviceList);
+    Promise.all([getPatients({ pageSize: 1000 }), getServices({ pageSize: 1000 })])
+      .then(([patientPage, servicePage]) => {
+        setPatients(patientPage.data);
+        setServices(servicePage.data);
       })
       .catch(() => {
         toast.error("Không thể tải danh sách bệnh nhân / dịch vụ.");

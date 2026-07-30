@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { AxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getServiceCategories } from "@/features/service-categories/api";
 import type { ServiceCategory } from "@/features/service-categories/types";
 import { deleteService, getServices } from "@/features/services/api";
@@ -27,29 +28,54 @@ export function ServicesPage() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [servicePendingDelete, setServicePendingDelete] = useState<Service | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [serviceList, categoryList] = await Promise.all([
-        getServices(),
-        getServiceCategories(),
-      ]);
-      setServices(sortServices(serviceList));
-      setCategories(categoryList);
-    } catch {
-      setError("Không thể tải danh sách dịch vụ.");
-    } finally {
-      setLoading(false);
-    }
+  const loadServices = useCallback(
+    async (params: { searchKey: string; pageIndex: number; pageSize: number }) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, meta } = await getServices({
+          searchKey: params.searchKey,
+          page: params.pageIndex + 1,
+          pageSize: params.pageSize,
+        });
+        setServices(sortServices(data));
+        setTotal(meta.total);
+      } catch {
+        setError("Không thể tải danh sách dịch vụ.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  // Danh mục dùng cho dropdown trong form — tải toàn bộ một lần.
+  useEffect(() => {
+    getServiceCategories({ pageSize: 1000 })
+      .then((res) => setCategories(res.data))
+      .catch(() => setError("Không thể tải danh mục dịch vụ."));
   }, []);
+
+  // Debounce ô tìm kiếm; đổi từ khóa thì quay về trang đầu.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPageIndex(0);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     Promise.resolve().then(() => {
-      loadData();
+      loadServices({ searchKey: debouncedSearch, pageIndex, pageSize });
     });
-  }, [loadData]);
+  }, [loadServices, debouncedSearch, pageIndex, pageSize]);
 
   const handleOpenCreate = () => {
     setEditingService(null);
@@ -64,6 +90,7 @@ export function ServicesPage() {
   const handleSaved = (service: Service) => {
     setServices((prev) => {
       const index = prev.findIndex((s) => s.id === service.id);
+      if (index === -1) setTotal((t) => t + 1);
       const next = index === -1 ? [...prev, service] : prev.with(index, service);
       return sortServices(next);
     });
@@ -75,6 +102,7 @@ export function ServicesPage() {
     try {
       await deleteService(servicePendingDelete.id);
       setServices((prev) => prev.filter((s) => s.id !== servicePendingDelete.id));
+      setTotal((t) => Math.max(0, t - 1));
       setServicePendingDelete(null);
     } catch (err) {
       const message =
@@ -101,11 +129,35 @@ export function ServicesPage() {
         loading={loading}
         onRequestEdit={handleRequestEdit}
         onRequestDelete={setServicePendingDelete}
+        pagination={{
+          pageIndex,
+          pageSize,
+          total,
+          onPaginationChange: ({ pageIndex: nextIndex, pageSize: nextSize }) => {
+            setPageIndex(nextSize !== pageSize ? 0 : nextIndex);
+            setPageSize(nextSize);
+          },
+        }}
         actions={
-          <Button onClick={handleOpenCreate} disabled={categories.length === 0} className="gap-1.5">
-            <Plus className="size-[17px]" />
-            Thêm dịch vụ
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm theo tên dịch vụ"
+                className="h-9 w-56 pl-8"
+              />
+            </div>
+            <Button
+              onClick={handleOpenCreate}
+              disabled={categories.length === 0}
+              className="gap-1.5"
+            >
+              <Plus className="size-[17px]" />
+              Thêm dịch vụ
+            </Button>
+          </div>
         }
       />
 

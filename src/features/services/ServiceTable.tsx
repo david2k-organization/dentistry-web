@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type ComponentProps, type ReactNode } from "react";
 
 import { DataTable } from "@/components/ui/DataTable";
 import { createServiceColumns } from "./columns";
@@ -9,6 +9,7 @@ type ServiceTableProps = {
   loading?: boolean;
   onRequestEdit: (service: Service) => void;
   onRequestDelete: (service: Service) => void;
+  pagination?: ComponentProps<typeof DataTable<Service>>["manualPagination"];
   actions?: ReactNode;
 };
 
@@ -17,6 +18,7 @@ export function ServiceTable({
   loading,
   onRequestEdit,
   onRequestDelete,
+  pagination,
   actions,
 }: ServiceTableProps) {
   const columns = useMemo(
@@ -34,6 +36,7 @@ export function ServiceTable({
       countLabel={(n) => `${n} dịch vụ`}
       actions={actions}
       emptyMessage="Chưa có dịch vụ nào."
+      manualPagination={pagination}
     />
   );
 }

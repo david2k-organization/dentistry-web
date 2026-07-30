@@ -1,9 +1,18 @@
-import { api, type ApiEnvelope } from "@/lib/api";
+import {
+  api,
+  listQuery,
+  normalizePaginated,
+  type ApiEnvelope,
+  type ListParams,
+  type Paginated,
+} from "@/lib/api";
 import type { CreateServiceInput, Service, UpdateServiceInput } from "./types";
 
-export async function getServices(): Promise<Service[]> {
-  const res = await api.get<ApiEnvelope<Service[]>>("/services");
-  return res.data.data;
+export async function getServices(params: ListParams = {}): Promise<Paginated<Service>> {
+  const res = await api.get<ApiEnvelope<Paginated<Service> | Service[]>>("/services", {
+    params: listQuery(params),
+  });
+  return normalizePaginated(res.data);
 }
 
 export async function getService(id: string): Promise<Service | null> {

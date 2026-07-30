@@ -57,6 +57,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <Input
             id="userName"
             autoComplete="username"
+            placeholder="Username"
             autoFocus
             aria-invalid={!!form.formState.errors.userName}
             {...form.register("userName")}
@@ -71,6 +72,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
               id="password"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
+              placeholder="Password"
               className="pr-8"
               aria-invalid={!!form.formState.errors.password}
               {...form.register("password")}

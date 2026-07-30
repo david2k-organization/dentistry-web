@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { AxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   deleteServiceCategory,
   getServiceCategories,
@@ -23,25 +24,47 @@ export function ServiceCategoriesPage() {
     null
   );
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
-  const loadCategories = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getServiceCategories();
-      setCategories(data);
-    } catch {
-      setError("Không thể tải danh sách danh mục dịch vụ.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadCategories = useCallback(
+    async (params: { searchKey: string; pageIndex: number; pageSize: number }) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, meta } = await getServiceCategories({
+          searchKey: params.searchKey,
+          page: params.pageIndex + 1,
+          pageSize: params.pageSize,
+        });
+        setCategories(data);
+        setTotal(meta.total);
+      } catch {
+        setError("Không thể tải danh sách danh mục dịch vụ.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
+  // Debounce ô tìm kiếm; đổi từ khóa thì quay về trang đầu.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPageIndex(0);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     Promise.resolve().then(() => {
-      loadCategories();
+      loadCategories({ searchKey: debouncedSearch, pageIndex, pageSize });
     });
-  }, [loadCategories]);
+  }, [loadCategories, debouncedSearch, pageIndex, pageSize]);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -56,6 +79,7 @@ export function ServiceCategoriesPage() {
   const handleSaved = (category: ServiceCategory) => {
     setCategories((prev) => {
       const index = prev.findIndex((c) => c.id === category.id);
+      if (index === -1) setTotal((t) => t + 1);
       const next = index === -1 ? [...prev, category] : prev.with(index, category);
       return next.sort((a, b) => a.displayOrder - b.displayOrder);
     });
@@ -67,6 +91,7 @@ export function ServiceCategoriesPage() {
     try {
       await deleteServiceCategory(categoryPendingDelete.id);
       setCategories((prev) => prev.filter((c) => c.id !== categoryPendingDelete.id));
+      setTotal((t) => Math.max(0, t - 1));
       setCategoryPendingDelete(null);
     } catch (err) {
       const message =
@@ -88,11 +113,31 @@ export function ServiceCategoriesPage() {
         loading={loading}
         onRequestEdit={handleRequestEdit}
         onRequestDelete={setCategoryPendingDelete}
+        pagination={{
+          pageIndex,
+          pageSize,
+          total,
+          onPaginationChange: ({ pageIndex: nextIndex, pageSize: nextSize }) => {
+            setPageIndex(nextSize !== pageSize ? 0 : nextIndex);
+            setPageSize(nextSize);
+          },
+        }}
         actions={
-          <Button onClick={handleOpenCreate} className="gap-1.5">
-            <Plus className="size-[17px]" />
-            Thêm danh mục
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm theo tên danh mục"
+                className="h-9 w-56 pl-8"
+              />
+            </div>
+            <Button onClick={handleOpenCreate} className="gap-1.5">
+              <Plus className="size-[17px]" />
+              Thêm danh mục
+            </Button>
+          </div>
         }
       />
 
