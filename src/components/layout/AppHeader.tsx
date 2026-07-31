@@ -24,6 +24,7 @@ const TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/invoices"), title: "Hóa đơn" },
   { match: (p) => p.startsWith("/inventory"), title: "Kho vật tư" },
   { match: (p) => p.startsWith("/staff"), title: "Nhân sự" },
+  { match: (p) => p.startsWith("/roles"), title: "Vai trò & phân quyền" },
   { match: (p) => p.startsWith("/reports"), title: "Báo cáo" },
 ];
 

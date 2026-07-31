@@ -16,6 +16,7 @@ import { Route as AuthenticatedTreatmentsIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedStaffIndexRouteImport } from './routes/_authenticated/staff/index'
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
 import { Route as AuthenticatedServiceCategoriesIndexRouteImport } from './routes/_authenticated/service-categories/index'
+import { Route as AuthenticatedRolesIndexRouteImport } from './routes/_authenticated/roles/index'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports/index'
 import { Route as AuthenticatedPatientsIndexRouteImport } from './routes/_authenticated/patients/index'
 import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices/index'
@@ -60,6 +61,11 @@ const AuthenticatedServiceCategoriesIndexRoute =
     path: '/service-categories/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRolesIndexRoute = AuthenticatedRolesIndexRouteImport.update({
+  id: '/roles/',
+  path: '/roles/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedReportsIndexRoute =
   AuthenticatedReportsIndexRouteImport.update({
     id: '/reports/',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/patients/': typeof AuthenticatedPatientsIndexRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
+  '/roles/': typeof AuthenticatedRolesIndexRoute
   '/service-categories/': typeof AuthenticatedServiceCategoriesIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
   '/staff/': typeof AuthenticatedStaffIndexRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/invoices': typeof AuthenticatedInvoicesIndexRoute
   '/patients': typeof AuthenticatedPatientsIndexRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
+  '/roles': typeof AuthenticatedRolesIndexRoute
   '/service-categories': typeof AuthenticatedServiceCategoriesIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
   '/staff': typeof AuthenticatedStaffIndexRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/_authenticated/patients/': typeof AuthenticatedPatientsIndexRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
+  '/_authenticated/roles/': typeof AuthenticatedRolesIndexRoute
   '/_authenticated/service-categories/': typeof AuthenticatedServiceCategoriesIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
   '/_authenticated/staff/': typeof AuthenticatedStaffIndexRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/invoices/'
     | '/patients/'
     | '/reports/'
+    | '/roles/'
     | '/service-categories/'
     | '/services/'
     | '/staff/'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/invoices'
     | '/patients'
     | '/reports'
+    | '/roles'
     | '/service-categories'
     | '/services'
     | '/staff'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/_authenticated/invoices/'
     | '/_authenticated/patients/'
     | '/_authenticated/reports/'
+    | '/_authenticated/roles/'
     | '/_authenticated/service-categories/'
     | '/_authenticated/services/'
     | '/_authenticated/staff/'
@@ -243,6 +255,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedServiceCategoriesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/roles/': {
+      id: '/_authenticated/roles/'
+      path: '/roles'
+      fullPath: '/roles/'
+      preLoaderRoute: typeof AuthenticatedRolesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports/': {
       id: '/_authenticated/reports/'
       path: '/reports'
@@ -296,6 +315,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInvoicesIndexRoute: typeof AuthenticatedInvoicesIndexRoute
   AuthenticatedPatientsIndexRoute: typeof AuthenticatedPatientsIndexRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
+  AuthenticatedRolesIndexRoute: typeof AuthenticatedRolesIndexRoute
   AuthenticatedServiceCategoriesIndexRoute: typeof AuthenticatedServiceCategoriesIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
   AuthenticatedStaffIndexRoute: typeof AuthenticatedStaffIndexRoute
@@ -310,6 +330,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInvoicesIndexRoute: AuthenticatedInvoicesIndexRoute,
   AuthenticatedPatientsIndexRoute: AuthenticatedPatientsIndexRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
+  AuthenticatedRolesIndexRoute: AuthenticatedRolesIndexRoute,
   AuthenticatedServiceCategoriesIndexRoute:
     AuthenticatedServiceCategoriesIndexRoute,
   AuthenticatedServicesIndexRoute: AuthenticatedServicesIndexRoute,

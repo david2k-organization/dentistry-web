@@ -8,6 +8,7 @@ import {
   PanelLeftOpen,
   Receipt,
   Settings,
+  ShieldCheck,
   Stethoscope,
   Syringe,
   Tags,
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { label: "Hóa đơn", to: "/invoices", icon: Receipt },
   { label: "Kho vật tư", to: "/inventory", icon: Package },
   { label: "Nhân sự", to: "/staff", icon: UsersRound },
+  { label: "Vai trò & phân quyền", to: "/roles", icon: ShieldCheck },
   { label: "Báo cáo", to: "/reports", icon: BarChart3 },
 ];
 
