@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import type { Patient } from "@/features/patients/types";
 import type { Service } from "@/features/services/types";
-import { days, durationOptions, timeSlotOptions } from "./constants";
+import { durationOptions, timeSlotOptions, type WeekDay } from "./constants";
 
 export type NewAppointmentInput = {
   day: number;
@@ -35,6 +35,8 @@ type NewAppointmentDialogProps = {
   onOpenChange: (open: boolean) => void;
   patients: Patient[];
   services: Service[];
+  /** Các ngày (T2–T7) của tuần đang hiển thị — lịch hẹn mới thuộc tuần này. */
+  weekDays: WeekDay[];
   presetDay?: number;
   presetStart?: string;
   onCreate: (input: NewAppointmentInput) => void;
@@ -45,6 +47,7 @@ export function NewAppointmentDialog({
   onOpenChange,
   patients,
   services,
+  weekDays,
   presetDay,
   presetStart,
   onCreate,
@@ -160,8 +163,8 @@ export function NewAppointmentDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {days.map((d, idx) => (
-                    <SelectItem key={d.date} value={String(idx)}>
+                  {weekDays.map((d, idx) => (
+                    <SelectItem key={d.key} value={String(idx)}>
                       {d.name} {d.date}
                     </SelectItem>
                   ))}

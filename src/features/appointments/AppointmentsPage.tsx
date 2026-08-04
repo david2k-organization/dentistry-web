@@ -1,48 +1,41 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { vi } from "date-fns/locale";
+import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { getPatients } from "@/features/patients/api";
 import type { Patient } from "@/features/patients/types";
 import { getServices } from "@/features/services/api";
 import type { Service } from "@/features/services/types";
 import { AppointmentDetailDialog } from "./AppointmentDetailDialog";
 import {
-  BODY_H,
-  HEAD_H,
   LEGEND,
   OPEN_HOUR,
-  SLOT_COUNT,
-  SLOT_H,
   STATUS,
+  addDays,
   addMinutes,
-  days,
-  hourLabels,
-  toMinutes,
+  buildWeekDays,
+  formatDayMonth,
+  formatWeekRange,
+  parseDateKey,
+  startOfWeek,
   type Appt,
 } from "./constants";
-import { NewAppointmentDialog, type NewAppointmentInput } from "./NewAppointmentDialog";
+import {
+  NewAppointmentDialog,
+  type NewAppointmentInput,
+} from "./NewAppointmentDialog";
+import { initialAppts } from "./sample-appointments";
+import { WeekCalendarGrid } from "./WeekCalendarGrid";
 
 const routeApi = getRouteApi("/_authenticated/appointments/");
-
-const initialAppts: Appt[] = [
-  { id: "a1", day: 0, start: "09:00", duration: 45, patient: "Hoàng Anh Tú", service: "Khám tổng quát", status: "done" },
-  { id: "a2", day: 0, start: "14:00", duration: 60, patient: "Ngô Bảo Châu", service: "Điều trị tủy", status: "booked" },
-  { id: "a3", day: 1, start: "08:30", duration: 30, patient: "Lý Thu Hằng", service: "Cạo vôi răng", status: "done" },
-  { id: "a4", day: 1, start: "10:30", duration: 90, patient: "Trịnh Văn Sơn", service: "Cấy ghép Implant", status: "booked" },
-  { id: "a5", day: 2, start: "08:00", duration: 30, patient: "Trần Thu Hà", service: "Cạo vôi răng", status: "done" },
-  { id: "a6", day: 2, start: "08:30", duration: 45, patient: "Nguyễn Văn Long", service: "Nhổ răng khôn", status: "in_progress" },
-  { id: "a7", day: 2, start: "09:15", duration: 45, patient: "Lê Minh Châu", service: "Trám răng thẩm mỹ", status: "arrived" },
-  { id: "a8", day: 2, start: "10:00", duration: 30, patient: "Phạm Quốc Bảo", service: "Niềng răng — tái khám", status: "booked" },
-  { id: "a9", day: 2, start: "10:45", duration: 60, patient: "Vũ Thị Mai", service: "Tẩy trắng răng", status: "booked" },
-  { id: "a10", day: 2, start: "14:30", duration: 90, patient: "Đỗ Hoàng Nam", service: "Cấy ghép Implant", status: "booked" },
-  { id: "a11", day: 3, start: "09:00", duration: 30, patient: "Bùi Khánh Vy", service: "Khám định kỳ", status: "booked" },
-  { id: "a12", day: 3, start: "11:00", duration: 45, patient: "Đặng Thu Uyên", service: "Trám răng", status: "cancelled" },
-  { id: "a13", day: 4, start: "08:30", duration: 60, patient: "Phan Đức Minh", service: "Bọc răng sứ", status: "booked" },
-  { id: "a14", day: 4, start: "15:00", duration: 45, patient: "Hồ Ngọc Lan", service: "Điều trị nha chu", status: "booked" },
-  { id: "a15", day: 5, start: "09:30", duration: 60, patient: "Tạ Quang Huy", service: "Nhổ răng khôn", status: "booked" },
-];
 
 export function AppointmentsPage() {
   const [appts, setAppts] = useState<Appt[]>(initialAppts);
@@ -51,25 +44,34 @@ export function AppointmentsPage() {
   const [services, setServices] = useState<Service[]>([]);
 
   const [newOpen, setNewOpen] = useState(false);
-  const [newPreset, setNewPreset] = useState<{ day: number; start: string } | null>(null);
+  const [newPreset, setNewPreset] = useState<{
+    day: number;
+    start: string;
+  } | null>(null);
+
+  const [weekStart, setWeekStart] = useState<Date>(() =>
+    startOfWeek(new Date()),
+  );
+  const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+  const weekDays = useMemo(() => buildWeekDays(weekStart), [weekStart]);
 
   const navigate = useNavigate();
   const { newAppt } = routeApi.useSearch();
 
   useEffect(() => {
-    Promise.all([getPatients({ pageSize: 1000 }), getServices({ pageSize: 1000 })])
+    Promise.all([
+      getPatients({ pageSize: 100 }),
+      getServices({ pageSize: 100 }),
+    ])
       .then(([patientPage, servicePage]) => {
         setPatients(patientPage.data);
         setServices(servicePage.data);
       })
       .catch(() => {
-        toast.error("Không thể tải danh sách bệnh nhân / dịch vụ.");
+        toast.error("Không thể tải lịch hẹn.");
       });
   }, []);
 
-  // Nút "Đặt hẹn" ở header điều hướng tới đây với ?newAppt=true — mở dialog ngay khi
-  // phát hiện cờ này trong lúc render, rồi dọn query string qua một effect riêng
-  // (effect đó chỉ gọi navigate, không setState, nên không kích rule set-state-in-effect).
   const [handledNewAppt, setHandledNewAppt] = useState(false);
   if (newAppt && !handledNewAppt) {
     setHandledNewAppt(true);
@@ -88,7 +90,7 @@ export function AppointmentsPage() {
   const handleCheckIn = () => {
     if (!selected) return;
     setAppts((prev) =>
-      prev.map((a) => (a.id === selected.id ? { ...a, status: "arrived" } : a))
+      prev.map((a) => (a.id === selected.id ? { ...a, status: "arrived" } : a)),
     );
     toast.success(`${selected.patient} đã check-in`);
     setSelected(null);
@@ -102,17 +104,21 @@ export function AppointmentsPage() {
   };
 
   const handleCellClick = (dayIndex: number, slotIndex: number) => {
-    const start = addMinutes(`${String(OPEN_HOUR).padStart(2, "0")}:00`, slotIndex * 15);
+    const start = addMinutes(
+      `${String(OPEN_HOUR).padStart(2, "0")}:00`,
+      slotIndex * 15,
+    );
     setNewPreset({ day: dayIndex, start });
     setNewOpen(true);
   };
 
   const handleCreateAppt = (input: NewAppointmentInput) => {
+    const target = weekDays[input.day];
     setAppts((prev) => [
       ...prev,
       {
         id: `a${Date.now()}`,
-        day: input.day,
+        date: target.key,
         start: input.start,
         duration: input.duration,
         patient: input.patient,
@@ -120,12 +126,65 @@ export function AppointmentsPage() {
         status: "booked",
       },
     ]);
-    toast.success(`Đã đặt hẹn ${input.patient} · ${days[input.day].name} ${input.start}`);
+    toast.success(
+      `Đã đặt hẹn ${input.patient} · ${target.name} ${target.date} ${input.start}`,
+    );
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="bg-white"
+          onClick={() => setWeekStart(startOfWeek(new Date()))}
+        >
+          Hôm nay
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Tuần trước"
+          className="bg-white"
+          onClick={() => setWeekStart((prev) => addDays(prev, -7))}
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Tuần sau"
+          className="bg-white"
+          onClick={() => setWeekStart((prev) => addDays(prev, 7))}
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+
+        <Popover open={weekPickerOpen} onOpenChange={setWeekPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2 bg-white font-normal">
+              <CalendarIcon className="size-4 text-muted-foreground" />
+              {formatWeekRange(weekStart)}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              locale={vi}
+              captionLayout="dropdown"
+              selected={weekStart}
+              defaultMonth={weekStart}
+              onSelect={(date) => {
+                if (!date) return;
+                setWeekStart(startOfWeek(date));
+                setWeekPickerOpen(false);
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <div className="flex-1" />
         <Button
           onClick={() => {
             setNewPreset(null);
@@ -136,10 +195,11 @@ export function AppointmentsPage() {
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-        {/* Header tuần + chú thích */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e6efee] px-4.5 py-3.5">
-          <div className="text-[14.5px] font-semibold text-foreground">Tuần 27/07 – 01/08/2026</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-card">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e6efee] px-4.5 py-3.5">
+          <div className="text-[14.5px] font-semibold text-foreground">
+            {formatWeekRange(weekStart)}
+          </div>
           <div className="text-xs text-muted-foreground">
             Bấm vào ô trống để đặt hẹn, bấm vào lịch hẹn để xem chi tiết
           </div>
@@ -147,97 +207,23 @@ export function AppointmentsPage() {
           <div className="flex flex-wrap gap-3.5 text-[11.5px] text-muted-foreground">
             {LEGEND.map((s) => (
               <div key={s} className="flex items-center gap-1.5">
-                <span className="px-4.5 rounded-[3px]" style={{ background: STATUS[s].dot }} />
+                <span
+                  className="px-4.5 rounded-[3px]"
+                  style={{ background: STATUS[s].dot }}
+                />
                 {STATUS[s].label}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Lưới lịch */}
-        <div className="overflow-x-auto">
-          <div className="flex min-w-215">
-            {/* Cột giờ */}
-            <div className="w-15.5 shrink-0 border-r border-[#eaf1f0]">
-              <div style={{ height: HEAD_H }} />
-              <div className="relative" style={{ height: BODY_H }}>
-                {hourLabels.map((h) => (
-                  <div
-                    key={h}
-                    className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-[#9fb3b1]"
-                    style={{ top: ((h - OPEN_HOUR) * 60 * SLOT_H) / 15 }}
-                  >
-                    {String(h).padStart(2, "0")}:00
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Cột ngày */}
-            {days.map((d, dayIndex) => (
-              <div key={d.name} className="min-w-0 flex-1 border-r border-[#eaf1f0] last:border-r-0">
-                <div
-                  className="flex items-center justify-center gap-1.5 border-b border-[#eaf1f0]"
-                  style={{ height: HEAD_H, background: d.today ? "#e7f1f0" : undefined }}
-                >
-                  <span
-                    className="text-[12.5px] font-semibold"
-                    style={{ color: d.today ? "#0f7a73" : "#16302e" }}
-                  >
-                    {d.name}
-                  </span>
-                  <span className="text-[11.5px] text-[#8aa3a1]">{d.date}</span>
-                </div>
-
-                <div className="relative" style={{ height: BODY_H }}>
-                  {/* Đường kẻ theo slot — bấm để đặt hẹn mới */}
-                  {Array.from({ length: SLOT_COUNT }).map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleCellClick(dayIndex, i)}
-                      title="Đặt hẹn mới"
-                      className="block w-full cursor-cell border-b border-[#eaf1f0] transition-colors hover:bg-[#f4f9f8]"
-                      style={{ height: SLOT_H }}
-                    />
-                  ))}
-
-                  {/* Khối lịch hẹn */}
-                  {appts
-                    .filter((a) => a.day === dayIndex)
-                    .map((a) => {
-                      const s = STATUS[a.status];
-                      const top = (toMinutes(a.start) * SLOT_H) / 15;
-                      const height = (a.duration * SLOT_H) / 15 - 3;
-                      return (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => setSelected(a)}
-                          title={`${a.patient} · ${a.service}`}
-                          className="absolute right-0.75 left-0.75 cursor-pointer overflow-hidden rounded-lg border px-1.75 py-1.25 text-left leading-tight transition-[filter] hover:brightness-[0.97]"
-                          style={{
-                            top,
-                            height,
-                            background: s.bg,
-                            borderColor: s.bg,
-                            borderLeft: `3px solid ${s.dot}`,
-                          }}
-                        >
-                          <div className="truncate text-[11.5px] font-semibold" style={{ color: s.fg }}>
-                            {a.patient}
-                          </div>
-                          <div className="truncate text-[10.5px]" style={{ color: s.fgSoft }}>
-                            {a.start} · {a.service}
-                          </div>
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <WeekCalendarGrid
+          className="min-h-0 flex-1"
+          weekDays={weekDays}
+          appts={appts}
+          onSlotClick={handleCellClick}
+          onApptClick={setSelected}
+        />
 
         <AppointmentDetailDialog
           open={selected != null}
@@ -245,7 +231,7 @@ export function AppointmentsPage() {
           title={selected?.patient ?? ""}
           subtitle={
             selected
-              ? `${days[selected.day].name} ${days[selected.day].date} · ${selected.start}–${addMinutes(selected.start, selected.duration)}`
+              ? `${formatDayMonth(parseDateKey(selected.date))} · ${selected.start}–${addMinutes(selected.start, selected.duration)}`
               : ""
           }
           status={selected ? STATUS[selected.status] : STATUS.booked}
@@ -269,6 +255,7 @@ export function AppointmentsPage() {
         onOpenChange={setNewOpen}
         patients={patients}
         services={services}
+        weekDays={weekDays}
         presetDay={newPreset?.day}
         presetStart={newPreset?.start}
         onCreate={handleCreateAppt}
