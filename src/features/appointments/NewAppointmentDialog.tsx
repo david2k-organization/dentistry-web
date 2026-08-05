@@ -18,16 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { Patient } from "@/features/patients/types";
 import type { Service } from "@/features/services/types";
+import type { User } from "@/features/users/types";
 import { durationOptions, timeSlotOptions, type WeekDay } from "./constants";
 
 export type NewAppointmentInput = {
+  patientId: string;
+  doctorId: string;
+  serviceId: string;
   day: number;
   start: string;
   duration: number;
-  patient: string;
-  service: string;
+  notes?: string;
 };
 
 type NewAppointmentDialogProps = {
@@ -35,11 +39,14 @@ type NewAppointmentDialogProps = {
   onOpenChange: (open: boolean) => void;
   patients: Patient[];
   services: Service[];
+  doctors: User[];
   /** Các ngày (T2–T7) của tuần đang hiển thị — lịch hẹn mới thuộc tuần này. */
   weekDays: WeekDay[];
   presetDay?: number;
   presetStart?: string;
   onCreate: (input: NewAppointmentInput) => void;
+  /** Đang gọi API tạo lịch hẹn — khoá nút lưu. */
+  saving?: boolean;
 };
 
 export function NewAppointmentDialog({
@@ -47,17 +54,21 @@ export function NewAppointmentDialog({
   onOpenChange,
   patients,
   services,
+  doctors,
   weekDays,
   presetDay,
   presetStart,
   onCreate,
+  saving = false,
 }: NewAppointmentDialogProps) {
   const [patientQuery, setPatientQuery] = useState("");
-  const [patientName, setPatientName] = useState("");
+  const [patientId, setPatientId] = useState("");
+  const [doctorId, setDoctorId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [day, setDay] = useState(0);
   const [start, setStart] = useState(timeSlotOptions[0]);
   const [duration, setDuration] = useState(30);
+  const [notes, setNotes] = useState("");
 
   // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở (thay vì dùng effect).
   const [wasOpen, setWasOpen] = useState(open);
@@ -65,11 +76,13 @@ export function NewAppointmentDialog({
     setWasOpen(open);
     if (open) {
       setPatientQuery("");
-      setPatientName(patients[0]?.fullName ?? "");
+      setPatientId(patients[0]?.id ?? "");
+      setDoctorId(doctors[0]?.id ?? "");
       setServiceId(services[0]?.id ?? "");
       setDay(presetDay ?? 0);
       setStart(presetStart ?? timeSlotOptions[0]);
       setDuration(services[0] ? services[0].durationMinutes : 30);
+      setNotes("");
     }
   }
 
@@ -86,13 +99,20 @@ export function NewAppointmentDialog({
     if (svc) setDuration(svc.durationMinutes);
   };
 
-  const selectedService = services.find((s) => s.id === serviceId);
-  const canSave = patientName.trim() !== "" && !!selectedService;
+  const canSave =
+    patientId !== "" && doctorId !== "" && serviceId !== "" && !saving;
 
   const handleSave = () => {
-    if (!canSave || !selectedService) return;
-    onCreate({ day, start, duration, patient: patientName, service: selectedService.name });
-    onOpenChange(false);
+    if (!canSave) return;
+    onCreate({
+      patientId,
+      doctorId,
+      serviceId,
+      day,
+      start,
+      duration,
+      notes: notes.trim() || undefined,
+    });
   };
 
   return (
@@ -100,7 +120,7 @@ export function NewAppointmentDialog({
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Đặt hẹn mới</DialogTitle>
-          <DialogDescription>Chọn bệnh nhân, dịch vụ và giờ hẹn.</DialogDescription>
+          <DialogDescription>Chọn bệnh nhân, bác sĩ, dịch vụ và giờ hẹn.</DialogDescription>
         </DialogHeader>
 
         <FieldGroup>
@@ -119,12 +139,12 @@ export function NewAppointmentDialog({
                 </span>
               )}
               {filteredPatients.slice(0, 24).map((p) => {
-                const active = p.fullName === patientName;
+                const active = p.id === patientId;
                 return (
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => setPatientName(p.fullName)}
+                    onClick={() => setPatientId(p.id)}
                     className="cursor-pointer rounded-full border px-3 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition-[filter] hover:brightness-95"
                     style={
                       active
@@ -137,6 +157,22 @@ export function NewAppointmentDialog({
                 );
               })}
             </div>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="appt-doctor">Bác sĩ</FieldLabel>
+            <Select value={doctorId} onValueChange={setDoctorId}>
+              <SelectTrigger id="appt-doctor" className="w-full">
+                <SelectValue placeholder="Chọn bác sĩ" />
+              </SelectTrigger>
+              <SelectContent>
+                {doctors.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           <Field>
@@ -204,6 +240,16 @@ export function NewAppointmentDialog({
               </Select>
             </Field>
           </div>
+
+          <Field>
+            <FieldLabel htmlFor="appt-notes">Ghi chú</FieldLabel>
+            <Textarea
+              id="appt-notes"
+              placeholder="Ghi chú thêm (tùy chọn)…"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </Field>
         </FieldGroup>
 
         <DialogFooter>
@@ -211,7 +257,7 @@ export function NewAppointmentDialog({
             Huỷ
           </Button>
           <Button onClick={handleSave} disabled={!canSave}>
-            Lưu lịch hẹn
+            {saving ? "Đang lưu…" : "Lưu lịch hẹn"}
           </Button>
         </DialogFooter>
       </DialogContent>

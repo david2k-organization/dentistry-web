@@ -143,6 +143,7 @@ export type Appt = {
   duration: number; // phút
   patient: string;
   service: string;
+  doctor: string;
   status: ApptStatus;
 };
 

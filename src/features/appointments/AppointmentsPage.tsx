@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { vi } from "date-fns/locale";
+import { AxiosError } from "axios";
 import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,9 @@ import { getPatients } from "@/features/patients/api";
 import type { Patient } from "@/features/patients/types";
 import { getServices } from "@/features/services/api";
 import type { Service } from "@/features/services/types";
+import { getUsers } from "@/features/users/api";
+import type { User } from "@/features/users/types";
+import { createAppointment, getAppointments, updateAppointment } from "./api";
 import { AppointmentDetailDialog } from "./AppointmentDetailDialog";
 import {
   LEGEND,
@@ -28,20 +32,29 @@ import {
   startOfWeek,
   type Appt,
 } from "./constants";
+import { toAppt, toAppointmentAt, UI_TO_API_STATUS } from "./map";
 import {
   NewAppointmentDialog,
   type NewAppointmentInput,
 } from "./NewAppointmentDialog";
-import { initialAppts } from "./sample-appointments";
 import { WeekCalendarGrid } from "./WeekCalendarGrid";
 
 const routeApi = getRouteApi("/_authenticated/appointments/");
 
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof AxiosError) {
+    return err.response?.data?.message ?? fallback;
+  }
+  return fallback;
+}
+
 export function AppointmentsPage() {
-  const [appts, setAppts] = useState<Appt[]>(initialAppts);
+  const [appts, setAppts] = useState<Appt[]>([]);
   const [selected, setSelected] = useState<Appt | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [doctors, setDoctors] = useState<User[]>([]);
+  const [saving, setSaving] = useState(false);
 
   const [newOpen, setNewOpen] = useState(false);
   const [newPreset, setNewPreset] = useState<{
@@ -62,10 +75,14 @@ export function AppointmentsPage() {
     Promise.all([
       getPatients({ pageSize: 100 }),
       getServices({ pageSize: 100 }),
+      getUsers({ roleName: "Bác sĩ", pageSize: 100 }),
+      getAppointments({ pageSize: 200 }),
     ])
-      .then(([patientPage, servicePage]) => {
+      .then(([patientPage, servicePage, doctorPage, appointmentPage]) => {
         setPatients(patientPage.data);
         setServices(servicePage.data);
+        setDoctors(doctorPage.data);
+        setAppts(appointmentPage.data.map(toAppt));
       })
       .catch(() => {
         toast.error("Không thể tải lịch hẹn.");
@@ -87,20 +104,38 @@ export function AppointmentsPage() {
     }
   }, [newAppt, navigate]);
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     if (!selected) return;
-    setAppts((prev) =>
-      prev.map((a) => (a.id === selected.id ? { ...a, status: "arrived" } : a)),
-    );
-    toast.success(`${selected.patient} đã check-in`);
-    setSelected(null);
+    const target = selected;
+    try {
+      const updated = await updateAppointment(target.id, {
+        status: UI_TO_API_STATUS.arrived,
+      });
+      setAppts((prev) =>
+        prev.map((a) => (a.id === target.id ? toAppt(updated) : a)),
+      );
+      toast.success(`${target.patient} đã check-in`);
+      setSelected(null);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Không thể check-in bệnh nhân."));
+    }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!selected) return;
-    setAppts((prev) => prev.filter((a) => a.id !== selected.id));
-    toast(`Đã huỷ lịch hẹn của ${selected.patient}`);
-    setSelected(null);
+    const target = selected;
+    try {
+      const updated = await updateAppointment(target.id, {
+        status: UI_TO_API_STATUS.cancelled,
+      });
+      setAppts((prev) =>
+        prev.map((a) => (a.id === target.id ? toAppt(updated) : a)),
+      );
+      toast(`Đã huỷ lịch hẹn của ${target.patient}`);
+      setSelected(null);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Không thể huỷ lịch hẹn."));
+    }
   };
 
   const handleCellClick = (dayIndex: number, slotIndex: number) => {
@@ -112,23 +147,29 @@ export function AppointmentsPage() {
     setNewOpen(true);
   };
 
-  const handleCreateAppt = (input: NewAppointmentInput) => {
+  const handleCreateAppt = async (input: NewAppointmentInput) => {
     const target = weekDays[input.day];
-    setAppts((prev) => [
-      ...prev,
-      {
-        id: `a${Date.now()}`,
-        date: target.key,
-        start: input.start,
+    setSaving(true);
+    try {
+      const created = await createAppointment({
+        patientId: input.patientId,
+        doctorId: input.doctorId,
+        serviceId: input.serviceId,
+        appointmentAt: toAppointmentAt(target.key, input.start),
         duration: input.duration,
-        patient: input.patient,
-        service: input.service,
-        status: "booked",
-      },
-    ]);
-    toast.success(
-      `Đã đặt hẹn ${input.patient} · ${target.name} ${target.date} ${input.start}`,
-    );
+        notes: input.notes,
+      });
+      const appt = toAppt(created);
+      setAppts((prev) => [...prev, appt]);
+      toast.success(
+        `Đã đặt hẹn ${appt.patient} · ${target.name} ${target.date} ${appt.start}`,
+      );
+      setNewOpen(false);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Không thể đặt lịch hẹn."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -240,8 +281,7 @@ export function AppointmentsPage() {
               ? [
                   { label: "Dịch vụ", value: selected.service },
                   { label: "Thời lượng", value: `${selected.duration} phút` },
-                  { label: "Bác sĩ", value: "BS. Lê Minh Anh" },
-                  { label: "Ghế", value: "Ghế 1" },
+                  { label: "Bác sĩ", value: selected.doctor },
                 ]
               : []
           }
@@ -255,10 +295,12 @@ export function AppointmentsPage() {
         onOpenChange={setNewOpen}
         patients={patients}
         services={services}
+        doctors={doctors}
         weekDays={weekDays}
         presetDay={newPreset?.day}
         presetStart={newPreset?.start}
         onCreate={handleCreateAppt}
+        saving={saving}
       />
     </div>
   );

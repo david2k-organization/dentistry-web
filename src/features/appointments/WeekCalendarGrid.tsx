@@ -18,7 +18,6 @@ type WeekCalendarGridProps = {
   appts: Appt[];
   onSlotClick: (dayIndex: number, slotIndex: number) => void;
   onApptClick: (appt: Appt) => void;
-  /** Lớp cho vùng cuộn (để bố cục vừa chiều cao trang). */
   className?: string;
 };
 
