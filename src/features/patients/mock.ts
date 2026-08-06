@@ -5,13 +5,29 @@
 
 export type PatientTag = "Mới" | "Đang điều trị" | "Theo dõi" | "Hoàn tất";
 
-export type PatientHistoryEntry = { date: string; name: string; note: string; amount: number };
+export type TreatmentStatus = "Hoàn tất" | "Đang xử lý";
+
+export type TreatmentMaterial = { name: string; code: string; qty: number; unit: string };
+
+export type PatientHistoryEntry = {
+  date: string;
+  name: string;
+  note: string;
+  amount: number;
+  region: string;
+  doctor: string;
+  materials: number;
+  status: TreatmentStatus;
+  followUp: string | null;
+  materialsList: TreatmentMaterial[];
+};
 
 export type PatientInvoiceSummary = {
   code: string;
   date: string;
   total: number;
   status: "Đã thu" | "Chờ thu";
+  summary: string;
 };
 
 export type PatientMock = {
@@ -19,6 +35,7 @@ export type PatientMock = {
   address: string;
   allergy: string;
   tag: PatientTag;
+  doctor: string;
   visits: number;
   debt: number;
   history: PatientHistoryEntry[];
@@ -70,6 +87,33 @@ const ALLERGIES = [
 
 const TAGS: PatientTag[] = ["Mới", "Đang điều trị", "Đang điều trị", "Theo dõi", "Hoàn tất"];
 
+export const DOCTORS = [
+  "BS. Lê Minh Anh",
+  "BS. Trần Quốc Bảo",
+  "BS. Nguyễn Thu Hà",
+  "BS. Phạm Gia Huy",
+  "BS. Đỗ Khánh Vy",
+];
+
+const REGIONS = [
+  "Toàn hàm",
+  "Hàm trên",
+  "Hàm dưới",
+  "Nhóm răng cửa",
+  "R16",
+  "R26",
+  "R36",
+];
+
+const MATERIALS: { name: string; code: string; unit: string }[] = [
+  { name: "Găng tay latex size M", code: "VT-072", unit: "hộp" },
+  { name: "Kim tiêm nha khoa 27G", code: "VT-018", unit: "vỉ" },
+  { name: "Composite Filtek Z350 A2", code: "VT-045", unit: "tuýp" },
+  { name: "Thuốc tê Lidocaine 2%", code: "VT-030", unit: "ống" },
+  { name: "Bông gòn cuộn tiệt trùng", code: "VT-051", unit: "gói" },
+  { name: "Mũi khoan kim cương", code: "VT-063", unit: "cái" },
+];
+
 const TREATMENTS: { name: string; note: string; amount: number }[] = [
   { name: "Khám và tư vấn", note: "BS. Lê Minh Anh", amount: 100_000 },
   { name: "Lấy cao răng, đánh bóng", note: "Viêm nướu nhẹ", amount: 300_000 },
@@ -93,7 +137,28 @@ function generate(id: string): PatientMock {
   let day = 2 + Math.floor(rng() * 8);
   const history: PatientHistoryEntry[] = Array.from({ length: historyCount }, () => {
     const t = pick(rng, TREATMENTS);
-    const entry = { date: `${String(day).padStart(2, "0")}/07/2026`, name: t.name, note: t.note, amount: t.amount };
+    const materialCount = Math.floor(rng() * 3);
+    const materialsList: TreatmentMaterial[] = Array.from({ length: materialCount }, () => {
+      const m = pick(rng, MATERIALS);
+      return { name: m.name, code: m.code, unit: m.unit, qty: 1 + Math.floor(rng() * 2) };
+    });
+    const entry: PatientHistoryEntry = {
+      date: `${String(day).padStart(2, "0")}/07/2026`,
+      name: t.name,
+      note: t.note,
+      amount: t.amount,
+      region: pick(rng, REGIONS),
+      doctor: pick(rng, DOCTORS),
+      materials: materialsList.reduce((sum, m) => sum + m.qty, 0),
+      status: rng() < 0.75 ? "Hoàn tất" : "Đang xử lý",
+      followUp:
+        rng() < 0.5
+          ? `${String(1 + Math.floor(rng() * 28)).padStart(2, "0")}/${String(
+              1 + Math.floor(rng() * 12),
+            ).padStart(2, "0")}/2027`
+          : null,
+      materialsList,
+    };
     day = Math.max(1, day - (2 + Math.floor(rng() * 10)));
     return entry;
   });
@@ -104,6 +169,7 @@ function generate(id: string): PatientMock {
     date: history[i]?.date ?? "29/07/2026",
     total: history[i]?.amount ?? pick(rng, TREATMENTS).amount,
     status: rng() < 0.7 ? "Đã thu" : "Chờ thu",
+    summary: [history[i]?.name, "Khám và tư vấn"].filter(Boolean).join(", "),
   }));
 
   return {
@@ -111,6 +177,7 @@ function generate(id: string): PatientMock {
     address: pick(rng, ADDRESSES),
     allergy: pick(rng, ALLERGIES),
     tag: pick(rng, TAGS),
+    doctor: pick(rng, DOCTORS),
     visits,
     debt: hasDebt ? (1 + Math.floor(rng() * 20)) * 100_000 : 0,
     history,
@@ -131,6 +198,16 @@ export function getPatientMock(id: string): PatientMock {
 /** Cập nhật các trường mock (địa chỉ, dị ứng, trạng thái) khi sửa hồ sơ. */
 export function setPatientMock(id: string, patch: Partial<Pick<PatientMock, "address" | "allergy" | "tag">>): void {
   store.set(id, { ...getPatientMock(id), ...patch });
+}
+
+/** Thêm 1 ca điều trị mới vào đầu lịch sử (dùng khi ghi hồ sơ). */
+export function addPatientTreatment(id: string, entry: PatientHistoryEntry): void {
+  const mock = getPatientMock(id);
+  store.set(id, {
+    ...mock,
+    visits: mock.visits + 1,
+    history: [entry, ...mock.history],
+  });
 }
 
 export const TAG_OPTIONS: PatientTag[] = ["Mới", "Đang điều trị", "Theo dõi", "Hoàn tất"];

@@ -1,12 +1,45 @@
-export type StockLogEntry = { date: string; delta: number; note: string };
+export type SupplyUnit = "BOX" | "TUBE" | "BLISTER" | "AMPOULE" | "PACK" | "PIECE";
 
-export type InventoryItem = {
-  sku: string;
+export type WarehouseLogType = "IMPORT" | "EXPORT";
+
+export type Supply = {
+  id: string;
+  code: string;
   name: string;
-  qty: number;
-  min: number;
-  unit: string;
+  quantity: number;
+  quota: number;
+  unit: SupplyUnit;
   supplier: string;
-  updated: string;
-  log: StockLogEntry[];
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateSupplyInput = {
+  code: string;
+  name: string;
+  quantity: number;
+  quota: number;
+  unit: SupplyUnit;
+  supplier: string;
+  note?: string;
+};
+
+export type UpdateSupplyInput = Partial<CreateSupplyInput>;
+
+export type WarehouseLog = {
+  id: number;
+  suppliesId: string;
+  type: WarehouseLogType;
+  quantity: number;
+  note: string | null;
+  createdAt: string;
+  supplies: { code: string; name: string; unit: SupplyUnit };
+};
+
+export type CreateWarehouseLogInput = {
+  suppliesId: string;
+  type: WarehouseLogType;
+  quantity: number;
+  note?: string;
 };

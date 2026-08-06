@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Minus, Plus } from "lucide-react";
+import { AxiosError } from "axios";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +13,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { InventoryItem } from "./types";
+import { createWarehouseLog, getWarehouseLogs, updateSupply } from "./api";
+import { formatShortDate, SUPPLY_UNIT_LABELS } from "./format";
+import type { Supply, WarehouseLog } from "./types";
 
 type StockMode = "in" | "out" | "count";
 
@@ -27,20 +31,19 @@ const NOTE_PLACEHOLDER: Record<StockMode, string> = {
   count: "VD: kiểm kê cuối tháng",
 };
 
-export type StockAdjustResult = { delta: number; note: string };
-
 type StockAdjustDialogProps = {
-  item: InventoryItem | null;
+  item: Supply | null;
   onOpenChange: (open: boolean) => void;
-  onSave: (result: StockAdjustResult) => void;
+  onSaved: (supply: Supply) => void;
 };
 
-export function StockAdjustDialog({ item, onOpenChange, onSave }: StockAdjustDialogProps) {
+export function StockAdjustDialog({ item, onOpenChange, onSaved }: StockAdjustDialogProps) {
   const [mode, setMode] = useState<StockMode>("in");
   const [amount, setAmount] = useState(10);
   const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [logs, setLogs] = useState<WarehouseLog[]>([]);
 
-  // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở (thay vì dùng effect).
   const open = !!item;
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
@@ -49,46 +52,94 @@ export function StockAdjustDialog({ item, onOpenChange, onSave }: StockAdjustDia
       setMode("in");
       setAmount(10);
       setNote("");
+      setLogs([]);
     }
   }
 
-  const qty = item?.qty ?? 0;
-  const min = item?.min ?? 0;
-  const result = mode === "count" ? Math.max(0, amount) : mode === "out" ? Math.max(0, qty - amount) : qty + amount;
+  useEffect(() => {
+    if (!item) return;
+    let cancelled = false;
+    getWarehouseLogs({ suppliesId: item.id, pageSize: 5 })
+      .then((res) => {
+        if (!cancelled) setLogs(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setLogs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item]);
+
+  const qty = item?.quantity ?? 0;
+  const quota = item?.quota ?? 0;
+  const unitLabel = item ? SUPPLY_UNIT_LABELS[item.unit] : "";
+  const result =
+    mode === "count" ? Math.max(0, amount) : mode === "out" ? qty - amount : qty + amount;
   const presets = mode === "count" ? [] : [1, 5, 10, 20, 50];
+  const exportTooMuch = mode === "out" && amount > qty;
 
   const handleModeChange = (m: StockMode) => {
     setMode(m);
     if (m === "count") setAmount(qty);
   };
 
-  const handleSave = () => {
-    if (!item) return;
-    const amt = Math.max(0, amount);
-    let delta: number;
-    let finalNote = note.trim();
-    if (mode === "count") {
-      delta = amt - item.qty;
-      if (!finalNote) finalNote = "Kiểm kê thực tế";
-    } else {
-      if (!amt) return;
-      delta = mode === "in" ? amt : -amt;
-      if (!finalNote) finalNote = mode === "in" ? `Nhập kho từ ${item.supplier}` : "Xuất dùng tại phòng khám";
+  const canSave = (() => {
+    if (!item || submitting) return false;
+    if (mode === "count") return amount !== qty;
+    return amount > 0 && !exportTooMuch;
+  })();
+
+  const handleSave = async () => {
+    if (!item || !canSave) return;
+    setSubmitting(true);
+    try {
+      let updated: Supply;
+      if (mode === "count") {
+        updated = await updateSupply(item.id, {
+          quantity: Math.max(0, amount),
+          ...(note.trim() ? { note: note.trim() } : {}),
+        });
+        toast.success(`Đã cập nhật tồn "${item.name}" thành ${updated.quantity} ${unitLabel}`);
+      } else {
+        const type = mode === "in" ? "IMPORT" : "EXPORT";
+        await createWarehouseLog({
+          suppliesId: item.id,
+          type,
+          quantity: amount,
+          note: note.trim() || undefined,
+        });
+        const newQty = mode === "in" ? qty + amount : qty - amount;
+        updated = { ...item, quantity: newQty };
+        toast.success(
+          mode === "in"
+            ? `Đã nhập ${amount} ${unitLabel} ${item.name}`
+            : `Đã xuất ${amount} ${unitLabel} ${item.name}`,
+        );
+      }
+      onSaved(updated);
+      onOpenChange(false);
+    } catch (err) {
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data?.message ?? "Không thể cập nhật tồn kho.")
+          : "Không thể cập nhật tồn kho.";
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
     }
-    onSave({ delta, note: finalNote });
-    onOpenChange(false);
   };
 
   const saveLabel =
     mode === "in" ? "Xác nhận nhập kho" : mode === "out" ? "Xác nhận xuất kho" : "Lưu kết quả kiểm kê";
 
   return (
-    <Dialog open={!!item} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{item?.name}</DialogTitle>
           <DialogDescription>
-            {item && `${item.sku} · ${item.supplier} · định mức ${item.min} ${item.unit}`}
+            {item && `${item.code} · ${item.supplier} · định mức ${item.quota} ${unitLabel}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -141,16 +192,22 @@ export function StockAdjustDialog({ item, onOpenChange, onSave }: StockAdjustDia
             <div className="mt-1 flex items-baseline gap-2">
               <div
                 className="text-xl font-semibold tabular-nums"
-                style={{ color: result < min ? "#a4553a" : undefined }}
+                style={{ color: result < quota ? "#a4553a" : undefined }}
               >
-                {result}
+                {Math.max(0, result)}
               </div>
               <div className="text-xs text-muted-foreground">
-                {item?.unit} · từ {qty}
+                {unitLabel} · từ {qty}
               </div>
             </div>
           </div>
         </div>
+
+        {exportTooMuch && (
+          <div className="mt-2.5 text-[12px] text-[#a4553a]">
+            Không đủ tồn kho để xuất. Tồn hiện tại: {qty} {unitLabel}.
+          </div>
+        )}
 
         {presets.length > 0 && (
           <div className="mt-3.5 flex flex-wrap gap-1.5">
@@ -181,34 +238,43 @@ export function StockAdjustDialog({ item, onOpenChange, onSave }: StockAdjustDia
           <div className="bg-[#f7fbfa] px-3.5 py-2.5 text-[11.5px] font-medium text-muted-foreground">
             Lịch sử gần đây
           </div>
-          {(!item || item.log.length === 0) && (
+          {logs.length === 0 && (
             <div className="border-t border-[#f2f7f6] px-3.5 py-3 text-[12.5px] text-muted-foreground">
               Chưa có giao dịch nào.
             </div>
           )}
-          {item?.log.slice(0, 4).map((h, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 border-t border-[#f2f7f6] px-3.5 py-2.5 text-[12.5px]"
-            >
-              <div className="w-[62px] text-muted-foreground tabular-nums">{h.date}</div>
+          {logs.map((h) => {
+            const delta = h.type === "IMPORT" ? h.quantity : -h.quantity;
+            return (
               <div
-                className="w-[58px] font-semibold tabular-nums"
-                style={{ color: h.delta > 0 ? "#3f7a55" : "#a4553a" }}
+                key={h.id}
+                className="flex items-center gap-3 border-t border-[#f2f7f6] px-3.5 py-2.5 text-[12.5px]"
               >
-                {h.delta > 0 ? "+" : ""}
-                {h.delta}
+                <div className="w-[62px] text-muted-foreground tabular-nums">
+                  {formatShortDate(h.createdAt)}
+                </div>
+                <div
+                  className="w-[58px] font-semibold tabular-nums"
+                  style={{ color: delta > 0 ? "#3f7a55" : "#a4553a" }}
+                >
+                  {delta > 0 ? "+" : ""}
+                  {delta}
+                </div>
+                <div className="min-w-0 flex-1 truncate text-[#4a6664]">
+                  {h.note || (h.type === "IMPORT" ? "Nhập kho" : "Xuất dùng")}
+                </div>
               </div>
-              <div className="min-w-0 flex-1 truncate text-[#4a6664]">{h.note}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={handleSave}>{saveLabel}</Button>
+          <Button onClick={handleSave} disabled={!canSave}>
+            {submitting ? "Đang lưu..." : saveLabel}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,23 +1,40 @@
 import { useEffect, useState } from "react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarPlus,
+  FilePlus2,
+  LayoutGrid,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { AxiosError } from "axios";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { BookAppointmentDialog } from "@/features/appointments/BookAppointmentDialog";
 import { deletePatient, getPatient } from "@/features/patients/api";
 import { DeletePatientDialog } from "@/features/patients/DeletePatientDialog";
 import {
   calculateAge,
-  formatCurrency,
-  formatDate,
   genderLabels,
   getInitials,
 } from "@/features/patients/format";
-import { getPatientMock, tagBg, tagFg } from "@/features/patients/mock";
+import {
+  getPatientMock,
+  tagBg,
+  tagFg,
+  type PatientHistoryEntry,
+} from "@/features/patients/mock";
 import { PatientFormDialog } from "@/features/patients/PatientFormDialog";
+import { TreatmentDetailDialog } from "@/features/patients/TreatmentDetailDialog";
+import { TreatmentRecordDialog } from "@/features/patients/TreatmentRecordDialog";
 import type { Patient } from "@/features/patients/types";
 
 const routeApi = getRouteApi("/_authenticated/patients/$patientId");
+
+const vnd = new Intl.NumberFormat("vi-VN");
+const dong = (amount: number) => `${vnd.format(amount)}đ`;
 
 export function PatientDetailPage() {
   const { patientId } = routeApi.useParams();
@@ -27,8 +44,13 @@ export function PatientDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [apptOpen, setApptOpen] = useState(false);
+  const [detailEntry, setDetailEntry] = useState<PatientHistoryEntry | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Buộc render lại sau khi ghi ca điều trị (dữ liệu mock nằm trong store ngoài React).
+  const [, setRefresh] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,10 +89,10 @@ export function PatientDetailPage() {
     }
   };
 
+  const notImplemented = () => toast.info("Tính năng đang được phát triển.");
+
   const mock = patient ? getPatientMock(patient.id) : null;
-  const totalPaid = mock
-    ? mock.history.reduce((sum, h) => sum + h.amount, 0)
-    : 0;
+  const lastVisit = mock?.history[0] ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -126,7 +148,19 @@ export function PatientDetailPage() {
                   .join(" · ")}
               </div>
             </div>
-            <div className="flex shrink-0 gap-2.5">
+            <div className="flex shrink-0 flex-wrap gap-2.5">
+              <Button className="gap-1.5" onClick={notImplemented}>
+                <LayoutGrid className="size-4" />
+                Sơ đồ răng
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setApptOpen(true)}
+              >
+                <CalendarPlus className="size-4" />
+                Đặt hẹn
+              </Button>
               <Button
                 variant="outline"
                 className="gap-1.5"
@@ -147,34 +181,20 @@ export function PatientDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-            <StatCard label="Số lần khám" value={String(mock.visits)} />
-            <StatCard
-              label="Công nợ"
-              value={mock.debt ? formatCurrency(mock.debt) : "0"}
-              color={mock.debt ? "#a4553a" : undefined}
-            />
-            <StatCard label="Tổng chi trả" value={formatCurrency(totalPaid)} />
-          </div>
-
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
             <div className="overflow-hidden rounded-[14px] border border-border bg-card">
               <div className="border-b border-[#e6efee] px-4.5 py-3.75 text-[14.5px] font-semibold text-foreground">
-                Thông tin chung
+                Thông tin hành chính
               </div>
               <div className="px-4.5">
+                <DetailField label="Mã hồ sơ" value={mock.code} />
+                <DetailField label="Bác sĩ phụ trách" value={mock.doctor} />
+                <DetailField label="Điện thoại" value={patient.phone ?? "—"} />
                 <DetailField
-                  label="Số điện thoại"
-                  value={patient.phone ?? "—"}
-                />
-                <DetailField label="Email" value={patient.email ?? "—"} />
-                <DetailField
-                  label="Ngày sinh"
-                  value={formatDate(patient.dateOfBirth)}
-                />
-                <DetailField
-                  label="Giới tính"
-                  value={patient.gender ? genderLabels[patient.gender] : "—"}
+                  label="Lần khám gần nhất"
+                  value={
+                    lastVisit ? `${lastVisit.date} — ${lastVisit.name}` : "—"
+                  }
                 />
                 <DetailField label="Địa chỉ" value={mock.address} />
                 <DetailField
@@ -196,89 +216,78 @@ export function PatientDetailPage() {
               <div className="overflow-hidden rounded-[14px] border border-border bg-card">
                 <div className="flex items-center gap-2.5 border-b border-[#e6efee] px-[18px] py-[15px]">
                   <div className="text-[14.5px] font-semibold text-foreground">
-                    Lịch sử điều trị
+                    Hồ sơ điều trị
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {mock.history.length} lần
+                    {mock.history.length} ca
                   </div>
+                  <div className="flex-1" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setRecordOpen(true)}
+                  >
+                    <FilePlus2 className="size-4" />
+                    Ghi hồ sơ
+                  </Button>
                 </div>
-                <div className="flex flex-col gap-2 px-[18px] py-3.5">
+                <div className="flex flex-col gap-2.5 px-[18px] py-3.5">
                   {mock.history.length === 0 && (
                     <div className="text-[12.5px] text-muted-foreground">
-                      Chưa có lịch sử điều trị.
+                      Chưa có ca điều trị nào.
                     </div>
                   )}
                   {mock.history.map((h, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-3.5 rounded-xl border border-[#eef4f3] px-3.5 py-3"
+                      className="rounded-xl border border-[#eef4f3] p-3.5"
                     >
-                      <div className="w-[70px] shrink-0 text-[12.5px] tabular-nums text-muted-foreground">
-                        {h.date}
-                      </div>
-                      <div className="h-7 w-[3px] shrink-0 rounded-full bg-[#cfe4e2]" />
-                      <div className="min-w-0 flex-1 leading-snug">
-                        <div className="text-[13px] font-medium text-foreground">
-                          {h.name}
+                      <div className="flex gap-3.5">
+                        <div className="w-[68px] shrink-0 pt-0.5 text-[12.5px] tabular-nums text-muted-foreground">
+                          {h.date}
                         </div>
-                        <div className="text-[11.5px] text-muted-foreground">
-                          {h.note}
+                        <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#3f7a55]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-2.5">
+                            <div className="min-w-0 flex-1 text-[13.5px] font-medium text-foreground">
+                              {h.name}
+                            </div>
+                            <span
+                              className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                              style={{
+                                background:
+                                  h.status === "Hoàn tất" ? "#eef6f1" : "#fdf3e8",
+                                color:
+                                  h.status === "Hoàn tất" ? "#3f7a55" : "#9a6524",
+                              }}
+                            >
+                              {h.status}
+                            </span>
+                            <div className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground">
+                              {dong(h.amount)}
+                            </div>
+                          </div>
+                          <div className="mt-1.5">
+                            <span className="rounded-md bg-[#e7f1f0] px-2 py-0.5 text-[11px] font-medium text-[#0a5c57]">
+                              {h.region}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 text-[12px] text-muted-foreground">
+                            {h.doctor} · {h.materials} vật tư
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setDetailEntry(h)}
+                            className="mt-2.5 cursor-pointer rounded-lg border border-[#cfe0df] bg-card px-3 py-1 text-[12px] font-medium text-primary hover:bg-accent"
+                          >
+                            Xem chi tiết
+                          </button>
                         </div>
-                      </div>
-                      <div className="shrink-0 text-[12.5px] font-medium tabular-nums text-foreground">
-                        {formatCurrency(h.amount)}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-                <div className="flex items-center gap-2.5 border-b border-[#e6efee] px-[18px] py-[15px]">
-                  <div className="text-[14.5px] font-semibold text-foreground">
-                    Hoá đơn của bệnh nhân
-                  </div>
-                  <div className="flex-1" />
-                  <div className="text-xs text-muted-foreground">
-                    {mock.invoices.length} hoá đơn
-                  </div>
-                </div>
-                {mock.invoices.length === 0 && (
-                  <div className="px-[18px] py-3.5 text-[12.5px] text-muted-foreground">
-                    Chưa có hoá đơn nào.
-                  </div>
-                )}
-                {mock.invoices.map((inv) => (
-                  <div
-                    key={inv.code}
-                    className="flex items-center gap-3 border-b border-[#f0f5f4] px-[18px] py-3 text-[13px] last:border-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="tabular-nums text-[#4a6664]">
-                          {inv.code}
-                        </span>
-                        <span className="text-[12px] tabular-nums text-[#9fb3b1]">
-                          {inv.date}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right leading-snug">
-                      <div className="font-semibold tabular-nums text-foreground">
-                        {formatCurrency(inv.total)}
-                      </div>
-                      <span
-                        className="text-[11px] font-medium"
-                        style={{
-                          color:
-                            inv.status === "Đã thu" ? "#3f7a55" : "#9a6524",
-                        }}
-                      >
-                        {inv.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -292,34 +301,40 @@ export function PatientDetailPage() {
         onSaved={(updated) => setPatient(updated)}
       />
 
+      {patient && mock && (
+        <TreatmentRecordDialog
+          open={recordOpen}
+          onOpenChange={setRecordOpen}
+          patient={patient}
+          patientCode={mock.code}
+          onSaved={() => setRefresh((n) => n + 1)}
+        />
+      )}
+
+      {patient && mock && (
+        <TreatmentDetailDialog
+          entry={detailEntry}
+          onOpenChange={(open) => !open && setDetailEntry(null)}
+          patientName={patient.fullName}
+          patientCode={mock.code}
+        />
+      )}
+
+      {patient && mock && (
+        <BookAppointmentDialog
+          open={apptOpen}
+          onOpenChange={setApptOpen}
+          patient={patient}
+          patientCode={mock.code}
+        />
+      )}
+
       <DeletePatientDialog
         patient={confirmingDelete ? patient : null}
         onOpenChange={(open) => !open && setConfirmingDelete(false)}
         onConfirm={handleConfirmDelete}
         deleting={deleting}
       />
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-}) {
-  return (
-    <div className="rounded-[14px] border border-border bg-card px-[18px] py-4">
-      <div className="text-[12.5px] text-muted-foreground">{label}</div>
-      <div
-        className="mt-1.5 text-2xl font-semibold tracking-tight tabular-nums"
-        style={{ color }}
-      >
-        {value}
-      </div>
     </div>
   );
 }

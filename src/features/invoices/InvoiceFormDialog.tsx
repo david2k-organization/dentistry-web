@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { getPatients } from "@/features/patients/api";
 import type { Patient } from "@/features/patients/types";
 import type { Service } from "@/features/services/types";
 import type { Invoice, InvoiceLine } from "./types";
@@ -49,11 +51,18 @@ export function InvoiceFormDialog({
   const [patient, setPatient] = useState("");
   const [lines, setLines] = useState<InvoiceLine[]>([]);
 
+  // Danh sách bệnh nhân cho ô chọn — khởi tạo từ prop, thay bằng kết quả tìm
+  // kiếm phía server khi người dùng gõ.
+  const [patientOptions, setPatientOptions] = useState<Patient[]>(patients);
+  const [patientLoading, setPatientLoading] = useState(false);
+  const searchSeq = useRef(0);
+
   // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở (thay vì dùng effect).
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
+      setPatientOptions(patients);
       if (invoice) {
         setPatient(invoice.patient);
         setLines(invoice.lines.map((l) => ({ ...l })));
@@ -63,6 +72,22 @@ export function InvoiceFormDialog({
       }
     }
   }
+
+  // Tìm bệnh nhân theo tên qua API; bỏ qua phản hồi cũ khi gõ nhanh.
+  const handlePatientSearch = useCallback((query: string) => {
+    const seq = ++searchSeq.current;
+    setPatientLoading(true);
+    getPatients({ searchKey: query.trim(), pageSize: 20 })
+      .then((res) => {
+        if (seq === searchSeq.current) setPatientOptions(res.data);
+      })
+      .catch(() => {
+        if (seq === searchSeq.current) setPatientOptions([]);
+      })
+      .finally(() => {
+        if (seq === searchSeq.current) setPatientLoading(false);
+      });
+  }, []);
 
   const total = lines.reduce((sum, l) => sum + l.qty * l.price, 0);
   const code = invoice ? invoice.code : nextCode;
@@ -111,25 +136,20 @@ export function InvoiceFormDialog({
 
         <div>
           <div className="text-[11.5px] text-muted-foreground">Bệnh nhân</div>
-          <div className="mt-1.5 flex max-h-[104px] flex-wrap gap-1.5 overflow-y-auto">
-            {patients.slice(0, 24).map((p) => {
-              const active = p.fullName === patient;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPatient(p.fullName)}
-                  className="cursor-pointer rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition-[filter] hover:brightness-95"
-                  style={
-                    active
-                      ? { background: "#0f7a73", color: "#ffffff", borderColor: "#0f7a73" }
-                      : { background: "#ffffff", color: "#4a6664", borderColor: "#dde8e7" }
-                  }
-                >
-                  {p.fullName}
-                </button>
-              );
-            })}
+          <div className="mt-1.5">
+            <SearchableSelect
+              options={patientOptions}
+              value={patient || null}
+              onChange={setPatient}
+              getOptionValue={(p) => p.fullName}
+              getOptionLabel={(p) => p.fullName}
+              placeholder="Chọn bệnh nhân"
+              searchPlaceholder="Tìm theo tên bệnh nhân"
+              emptyMessage="Không tìm thấy bệnh nhân."
+              onSearchChange={handlePatientSearch}
+              loading={patientLoading}
+              selectedLabel={patient || undefined}
+            />
           </div>
         </div>
 
