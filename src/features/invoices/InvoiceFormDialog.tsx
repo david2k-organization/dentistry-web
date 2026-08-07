@@ -1,4 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Minus, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +30,12 @@ export type InvoiceFormResult = {
   markPaid: boolean;
 };
 
+const invoiceFormSchema = z.object({
+  patient: z.string().min(1),
+});
+
+type InvoiceFormValues = z.input<typeof invoiceFormSchema>;
+
 type InvoiceFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,7 +57,6 @@ export function InvoiceFormDialog({
   onSave,
 }: InvoiceFormDialogProps) {
   const isEditing = !!invoice;
-  const [patient, setPatient] = useState("");
   const [lines, setLines] = useState<InvoiceLine[]>([]);
 
   // Danh sách bệnh nhân cho ô chọn — khởi tạo từ prop, thay bằng kết quả tìm
@@ -57,21 +65,26 @@ export function InvoiceFormDialog({
   const [patientLoading, setPatientLoading] = useState(false);
   const searchSeq = useRef(0);
 
-  // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở (thay vì dùng effect).
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
+  const form = useForm<InvoiceFormValues>({
+    resolver: zodResolver(invoiceFormSchema),
+    defaultValues: { patient: "" },
+  });
+
+  const patient = form.watch("patient");
+
+  useEffect(() => {
     if (open) {
       setPatientOptions(patients);
       if (invoice) {
-        setPatient(invoice.patient);
+        form.reset({ patient: invoice.patient });
         setLines(invoice.lines.map((l) => ({ ...l })));
       } else {
-        setPatient(patients[0]?.fullName ?? "");
+        form.reset({ patient: patients[0]?.fullName ?? "" });
         setLines([]);
       }
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Tìm bệnh nhân theo tên qua API; bỏ qua phản hồi cũ khi gõ nhanh.
   const handlePatientSearch = useCallback((query: string) => {
@@ -118,11 +131,12 @@ export function InvoiceFormDialog({
     setLines((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSave = (markPaid: boolean) => {
-    if (lines.length === 0) return;
-    onSave({ mode: invoice ? "edit" : "new", code, patient, lines, markPaid });
-    onOpenChange(false);
-  };
+  const submit = (markPaid: boolean) =>
+    form.handleSubmit((values) => {
+      if (lines.length === 0) return;
+      onSave({ mode: invoice ? "edit" : "new", code, patient: values.patient, lines, markPaid });
+      onOpenChange(false);
+    });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,7 +154,7 @@ export function InvoiceFormDialog({
             <SearchableSelect
               options={patientOptions}
               value={patient || null}
-              onChange={setPatient}
+              onChange={(v) => form.setValue("patient", v)}
               getOptionValue={(p) => p.fullName}
               getOptionLabel={(p) => p.fullName}
               placeholder="Chọn bệnh nhân"
@@ -241,13 +255,13 @@ export function InvoiceFormDialog({
         </div>
 
         <DialogFooter className="items-center gap-2.5 sm:justify-start">
-          <Button onClick={() => handleSave(false)} disabled={lines.length === 0}>
+          <Button onClick={submit(false)} disabled={lines.length === 0}>
             {isEditing ? "Lưu thay đổi" : "Lưu hoá đơn nháp"}
           </Button>
           {lines.length > 0 && (
             <Button
               variant="outline"
-              onClick={() => handleSave(true)}
+              onClick={submit(true)}
               className="border-[#cfe0df] text-primary hover:bg-accent"
             >
               Lưu và thu ngay

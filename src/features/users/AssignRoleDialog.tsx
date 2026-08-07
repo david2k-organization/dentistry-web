@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { AxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +30,12 @@ import {
 import { updateUser } from "./api";
 import type { User } from "./types";
 
+const assignRoleSchema = z.object({
+  roleId: z.number().nullable(),
+});
+
+type AssignRoleFormValues = z.input<typeof assignRoleSchema>;
+
 type AssignRoleDialogProps = {
   user: User | null;
   roles: Role[];
@@ -40,22 +49,26 @@ export function AssignRoleDialog({
   onOpenChange,
   onSaved,
 }: AssignRoleDialogProps) {
-  const [roleId, setRoleId] = useState<number | null>(null);
   const [detail, setDetail] = useState<Role | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const form = useForm<AssignRoleFormValues>({
+    resolver: zodResolver(assignRoleSchema),
+    defaultValues: { roleId: null },
+  });
+
+  const roleId = form.watch("roleId");
+
   // Đặt lại lựa chọn mỗi khi mở dialog cho một user khác.
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  if (user && user.id !== currentUserId) {
-    setCurrentUserId(user.id);
-    setRoleId(user.roleId ?? null);
-    setDetail(null);
-    setSubmitError(null);
-  } else if (!user && currentUserId !== null) {
-    setCurrentUserId(null);
-  }
+  useEffect(() => {
+    if (user) {
+      form.reset({ roleId: user.roleId ?? null });
+      setDetail(null);
+      setSubmitError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Tải chi tiết vai trò đang chọn để xem trước danh sách quyền được cấp.
   useEffect(() => {
@@ -80,12 +93,11 @@ export function AssignRoleDialog({
   const changed = user != null && roleId != null && roleId !== user.roleId;
   const groups = groupPermissions(detail?.permissions ?? []);
 
-  const handleSave = async () => {
-    if (!user || roleId == null) return;
-    setSaving(true);
+  const onSubmit = form.handleSubmit(async (values) => {
+    if (!user || values.roleId == null) return;
     setSubmitError(null);
     try {
-      const updated = await updateUser(user.id, { roleId });
+      const updated = await updateUser(user.id, { roleId: values.roleId });
       onSaved(updated);
       onOpenChange(false);
     } catch (err) {
@@ -94,10 +106,8 @@ export function AssignRoleDialog({
           ? (err.response?.data?.message ?? "Không thể gán vai trò.")
           : "Không thể gán vai trò.",
       );
-    } finally {
-      setSaving(false);
     }
-  };
+  });
 
   return (
     <Dialog open={!!user} onOpenChange={onOpenChange}>
@@ -110,11 +120,11 @@ export function AssignRoleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div>
+        <form id="assign-role-form" onSubmit={onSubmit}>
           <div className="text-[11.5px] text-muted-foreground">Vai trò</div>
           <Select
             value={roleId != null ? String(roleId) : undefined}
-            onValueChange={(v) => setRoleId(Number(v))}
+            onValueChange={(v) => form.setValue("roleId", Number(v))}
           >
             <SelectTrigger className="mt-1.5 w-full">
               <SelectValue placeholder="Chọn vai trò" />
@@ -127,7 +137,7 @@ export function AssignRoleDialog({
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </form>
 
         <div className="mt-1">
           <div className="flex items-center gap-2.5">
@@ -200,8 +210,12 @@ export function AssignRoleDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={handleSave} disabled={!changed || saving}>
-            {saving ? "Đang lưu..." : "Lưu phân quyền"}
+          <Button
+            type="submit"
+            form="assign-role-form"
+            disabled={!changed || form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting ? "Đang lưu..." : "Lưu phân quyền"}
           </Button>
         </DialogFooter>
       </DialogContent>

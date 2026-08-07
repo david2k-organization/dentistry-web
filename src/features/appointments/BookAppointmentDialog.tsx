@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { AxiosError } from "axios";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -32,6 +35,24 @@ import { createAppointment } from "./api";
 import { durationOptions } from "./constants";
 import type { Appointment } from "./types";
 
+const bookAppointmentSchema = z.object({
+  doctorId: z.string().min(1),
+  serviceId: z.string().min(1),
+  when: z.date().optional(),
+  duration: z.number(),
+  notes: z.string(),
+});
+
+type BookAppointmentFormValues = z.input<typeof bookAppointmentSchema>;
+
+const emptyValues: BookAppointmentFormValues = {
+  doctorId: "",
+  serviceId: "",
+  when: undefined,
+  duration: 30,
+  notes: "",
+};
+
 type BookAppointmentDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,26 +70,28 @@ export function BookAppointmentDialog({
 }: BookAppointmentDialogProps) {
   const [services, setServices] = useState<Service[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
-  const [doctorId, setDoctorId] = useState("");
-  const [serviceId, setServiceId] = useState("");
   const [selectedServiceName, setSelectedServiceName] = useState("");
   const [serviceLoading, setServiceLoading] = useState(false);
-  const [when, setWhen] = useState<Date | undefined>(undefined);
-  const [duration, setDuration] = useState(30);
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const serviceSeq = useRef(0);
 
+  const form = useForm<BookAppointmentFormValues>({
+    resolver: zodResolver(bookAppointmentSchema),
+    defaultValues: emptyValues,
+  });
+
+  const doctorId = form.watch("doctorId");
+  const serviceId = form.watch("serviceId");
+  const when = form.watch("when");
+  const duration = form.watch("duration");
+
   // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở.
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
+  useEffect(() => {
     if (open) {
-      setWhen(undefined);
-      setNotes("");
-      setSubmitting(false);
+      form.reset(emptyValues);
+      setSelectedServiceName("");
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Nạp bác sĩ + dịch vụ khi mở dialog và đặt lựa chọn mặc định.
   useEffect(() => {
@@ -82,10 +105,10 @@ export function BookAppointmentDialog({
         if (cancelled) return;
         setServices(servicePage.data);
         setDoctors(doctorPage.data);
-        setDoctorId(doctorPage.data[0]?.id ?? "");
-        setServiceId(servicePage.data[0]?.id ?? "");
+        form.setValue("doctorId", doctorPage.data[0]?.id ?? "");
+        form.setValue("serviceId", servicePage.data[0]?.id ?? "");
         setSelectedServiceName(servicePage.data[0]?.name ?? "");
-        setDuration(servicePage.data[0]?.durationMinutes ?? 30);
+        form.setValue("duration", servicePage.data[0]?.durationMinutes ?? 30);
       })
       .catch(() => {
         if (!cancelled) toast.error("Không thể tải dữ liệu đặt hẹn.");
@@ -93,13 +116,14 @@ export function BookAppointmentDialog({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleSelectService = (id: string) => {
-    setServiceId(id);
+    form.setValue("serviceId", id);
     const svc = services.find((s) => s.id === id);
     if (svc) {
-      setDuration(svc.durationMinutes);
+      form.setValue("duration", svc.durationMinutes);
       setSelectedServiceName(svc.name);
     }
   };
@@ -121,22 +145,21 @@ export function BookAppointmentDialog({
   };
 
   const canSave =
-    doctorId !== "" && serviceId !== "" && when != null && !submitting;
+    doctorId !== "" && serviceId !== "" && when != null && !form.formState.isSubmitting;
 
-  const handleSave = async () => {
-    if (!canSave || !when) return;
-    setSubmitting(true);
+  const onSubmit = form.handleSubmit(async (values) => {
+    if (!values.when) return;
     try {
       const created = await createAppointment({
         patientId: patient.id,
-        doctorId,
-        serviceId,
-        appointmentAt: when.toISOString(),
-        duration,
-        notes: notes.trim() || undefined,
+        doctorId: values.doctorId,
+        serviceId: values.serviceId,
+        appointmentAt: values.when.toISOString(),
+        duration: values.duration,
+        notes: values.notes.trim() || undefined,
       });
       toast.success(
-        `Đã đặt hẹn cho ${patient.fullName} lúc ${format(when, "HH:mm dd/MM/yyyy")}`,
+        `Đã đặt hẹn cho ${patient.fullName} lúc ${format(values.when, "HH:mm dd/MM/yyyy")}`,
       );
       onCreated?.(created);
       onOpenChange(false);
@@ -146,10 +169,8 @@ export function BookAppointmentDialog({
           ? (err.response?.data?.message ?? "Không thể đặt lịch hẹn.")
           : "Không thể đặt lịch hẹn.";
       toast.error(message);
-    } finally {
-      setSubmitting(false);
     }
-  };
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -161,98 +182,99 @@ export function BookAppointmentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <FieldGroup>
-          <Field>
-            <FieldLabel>Bệnh nhân</FieldLabel>
-            <div className="flex h-9 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-foreground">
-              <span className="truncate">
-                {patient.fullName}
-                {patientCode ? ` · ${patientCode}` : ""}
-              </span>
-            </div>
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor="appt-doctor">Bác sĩ</FieldLabel>
-            <Select value={doctorId} onValueChange={setDoctorId}>
-              <SelectTrigger id="appt-doctor" className="w-full">
-                <SelectValue placeholder="Chọn bác sĩ" />
-              </SelectTrigger>
-              <SelectContent>
-                {doctors.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field>
-            <FieldLabel>Dịch vụ</FieldLabel>
-            <SearchableSelect
-              options={services}
-              value={serviceId || null}
-              onChange={handleSelectService}
-              getOptionValue={(s) => s.id}
-              getOptionLabel={(s) => s.name}
-              placeholder="Chọn dịch vụ"
-              searchPlaceholder="Tìm theo tên dịch vụ"
-              emptyMessage="Không tìm thấy dịch vụ."
-              onSearchChange={handleServiceSearch}
-              loading={serviceLoading}
-              selectedLabel={selectedServiceName || undefined}
-            />
-          </Field>
-
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <form id="book-appointment-form" onSubmit={onSubmit}>
+          <FieldGroup>
             <Field>
-              <FieldLabel>Thời gian hẹn</FieldLabel>
-              <DateTimePicker
-                value={when}
-                onChange={setWhen}
-                placeholder="Chọn ngày giờ hẹn"
-                minuteStep={15}
-              />
+              <FieldLabel>Bệnh nhân</FieldLabel>
+              <div className="flex h-9 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-foreground">
+                <span className="truncate">
+                  {patient.fullName}
+                  {patientCode ? ` · ${patientCode}` : ""}
+                </span>
+              </div>
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="appt-duration">Thời lượng</FieldLabel>
-              <Select
-                value={String(duration)}
-                onValueChange={(v) => setDuration(Number(v))}
-              >
-                <SelectTrigger id="appt-duration" className="w-full">
-                  <SelectValue />
+              <FieldLabel htmlFor="appt-doctor">Bác sĩ</FieldLabel>
+              <Select value={doctorId} onValueChange={(v) => form.setValue("doctorId", v)}>
+                <SelectTrigger id="appt-doctor" className="w-full">
+                  <SelectValue placeholder="Chọn bác sĩ" />
                 </SelectTrigger>
                 <SelectContent>
-                  {durationOptions.map((d) => (
-                    <SelectItem key={d} value={String(d)}>
-                      {d} phút
+                  {doctors.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.fullName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
-          </div>
 
-          <Field>
-            <FieldLabel htmlFor="appt-notes">Ghi chú</FieldLabel>
-            <Textarea
-              id="appt-notes"
-              placeholder="Ghi chú thêm (tùy chọn)…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </Field>
-        </FieldGroup>
+            <Field>
+              <FieldLabel>Dịch vụ</FieldLabel>
+              <SearchableSelect
+                options={services}
+                value={serviceId || null}
+                onChange={handleSelectService}
+                getOptionValue={(s) => s.id}
+                getOptionLabel={(s) => s.name}
+                placeholder="Chọn dịch vụ"
+                searchPlaceholder="Tìm theo tên dịch vụ"
+                emptyMessage="Không tìm thấy dịch vụ."
+                onSearchChange={handleServiceSearch}
+                loading={serviceLoading}
+                selectedLabel={selectedServiceName || undefined}
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>Thời gian hẹn</FieldLabel>
+                <DateTimePicker
+                  value={when}
+                  onChange={(d) => form.setValue("when", d)}
+                  placeholder="Chọn ngày giờ hẹn"
+                  minuteStep={15}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="appt-duration">Thời lượng</FieldLabel>
+                <Select
+                  value={String(duration)}
+                  onValueChange={(v) => form.setValue("duration", Number(v))}
+                >
+                  <SelectTrigger id="appt-duration" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {durationOptions.map((d) => (
+                      <SelectItem key={d} value={String(d)}>
+                        {d} phút
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+
+            <Field>
+              <FieldLabel htmlFor="appt-notes">Ghi chú</FieldLabel>
+              <Textarea
+                id="appt-notes"
+                placeholder="Ghi chú thêm (tùy chọn)…"
+                {...form.register("notes")}
+              />
+            </Field>
+          </FieldGroup>
+        </form>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={handleSave} disabled={!canSave}>
-            {submitting ? "Đang lưu…" : "Lưu lịch hẹn"}
+          <Button type="submit" form="book-appointment-form" disabled={!canSave}>
+            {form.formState.isSubmitting ? "Đang lưu…" : "Lưu lịch hẹn"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -61,7 +61,6 @@ type PatientFormValues = z.input<typeof patientFormSchema>;
 type PatientFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Khi có giá trị: dialog chạy ở chế độ sửa bệnh nhân này thay vì tạo mới. */
   patient?: Patient | null;
   onSaved: (patient: Patient) => void;
 };
@@ -92,7 +91,6 @@ function valuesFromPatient(patient: Patient): PatientFormValues {
   };
 }
 
-/** Ô nhập dạng khung viền + nhãn phía trên, đúng theo phong cách thiết kế. */
 function FieldBox({
   label,
   span,

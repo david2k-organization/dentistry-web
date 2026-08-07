@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Ban } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +22,15 @@ const fmt = (n: number) => `${vnd.format(n)} đ`;
 
 const REASONS = ["Bệnh nhân đổi ý", "Lập sai dịch vụ", "Trùng hoá đơn", "Chuyển sang buổi khác"];
 
+const cancelFormSchema = z.object({
+  reason: z.string().min(1, "Vui lòng chọn lý do"),
+  note: z.string(),
+});
+
+type CancelFormValues = z.input<typeof cancelFormSchema>;
+
+const emptyValues: CancelFormValues = { reason: REASONS[0], note: "" };
+
 type CancelInvoiceDialogProps = {
   invoice: Invoice | null;
   onOpenChange: (open: boolean) => void;
@@ -30,19 +42,21 @@ export function CancelInvoiceDialog({
   onOpenChange,
   onConfirm,
 }: CancelInvoiceDialogProps) {
-  const [reason, setReason] = useState(REASONS[0]);
-  const [note, setNote] = useState("");
+  const form = useForm<CancelFormValues>({
+    resolver: zodResolver(cancelFormSchema),
+    defaultValues: emptyValues,
+  });
 
-  // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở (thay vì dùng effect).
-  const open = !!invoice;
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setReason(REASONS[0]);
-      setNote("");
-    }
-  }
+  useEffect(() => {
+    if (invoice) form.reset(emptyValues);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice]);
+
+  const reason = form.watch("reason");
+
+  const onSubmit = form.handleSubmit((values) => {
+    onConfirm(values.reason, values.note);
+  });
 
   return (
     <Dialog open={!!invoice} onOpenChange={onOpenChange}>
@@ -58,7 +72,7 @@ export function CancelInvoiceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div>
+        <form id="cancel-invoice-form" onSubmit={onSubmit}>
           <div className="text-[11.5px] text-muted-foreground">Lý do huỷ</div>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {REASONS.map((r) => {
@@ -67,7 +81,7 @@ export function CancelInvoiceDialog({
                 <button
                   key={r}
                   type="button"
-                  onClick={() => setReason(r)}
+                  onClick={() => form.setValue("reason", r)}
                   className="cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-[filter] hover:brightness-95"
                   style={
                     active
@@ -82,16 +96,16 @@ export function CancelInvoiceDialog({
           </div>
           <Input
             className="mt-2.5"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
             placeholder="Ghi chú thêm (không bắt buộc)"
+            {...form.register("note")}
           />
-        </div>
+        </form>
 
         <DialogFooter className="sm:justify-start">
           <Button
+            type="submit"
+            form="cancel-invoice-form"
             className="bg-[#a4553a] text-white hover:bg-[#8a4530]"
-            onClick={() => onConfirm(reason, note)}
           >
             Xác nhận huỷ
           </Button>

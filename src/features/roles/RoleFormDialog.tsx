@@ -1,4 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { AxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +17,16 @@ import { describePermission, groupPermissions, methodColors } from "@/features/p
 import type { Permission } from "@/features/permissions/types";
 import { createRole, getRole, updateRole } from "./api";
 import type { Role } from "./types";
+
+const roleFormSchema = z.object({
+  name: z.string().trim().min(1, "Vui lòng nhập tên vai trò"),
+  description: z.string(),
+  isActive: z.boolean(),
+});
+
+type RoleFormValues = z.input<typeof roleFormSchema>;
+
+const emptyValues: RoleFormValues = { name: "", description: "", isActive: true };
 
 type RoleFormDialogProps = {
   open: boolean;
@@ -39,25 +52,25 @@ const boxInputClass =
 
 export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSaved }: RoleFormDialogProps) {
   const isEditing = roleId != null;
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [isActive, setIsActive] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
+  const form = useForm<RoleFormValues>({
+    resolver: zodResolver(roleFormSchema),
+    defaultValues: emptyValues,
+  });
+
+  const isActive = form.watch("isActive");
+
+  useEffect(() => {
     if (open) {
       setSubmitError(null);
-      setName("");
-      setDescription("");
-      setIsActive(true);
+      form.reset(emptyValues);
       setSelected(new Set());
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open || roleId == null) return;
@@ -67,9 +80,11 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
       try {
         const role = await getRole(roleId);
         if (cancelled) return;
-        setName(role.name);
-        setDescription(role.description ?? "");
-        setIsActive(role.isActive ?? true);
+        form.reset({
+          name: role.name,
+          description: role.description ?? "",
+          isActive: role.isActive ?? true,
+        });
         setSelected(new Set((role.permissions ?? []).map((p) => p.id)));
       } catch {
         if (!cancelled) setSubmitError("Không thể tải chi tiết vai trò.");
@@ -80,10 +95,10 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, roleId]);
 
   const groups = groupPermissions(permissions);
-  const canSave = name.trim() !== "" && !loadingDetail;
 
   const toggle = (id: number) => {
     setSelected((prev) => {
@@ -105,14 +120,12 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
     });
   };
 
-  const handleSave = async () => {
-    if (!canSave) return;
-    setSaving(true);
+  const onSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);
     const payload = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      isActive,
+      name: values.name.trim(),
+      description: values.description.trim() || undefined,
+      isActive: values.isActive,
       permissionIds: [...selected],
     };
     try {
@@ -122,10 +135,8 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
     } catch (error) {
       const fallback = isEditing ? "Không thể cập nhật vai trò." : "Không thể tạo vai trò.";
       setSubmitError(error instanceof AxiosError ? (error.response?.data?.message ?? fallback) : fallback);
-    } finally {
-      setSaving(false);
     }
-  };
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -142,22 +153,21 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
         {loadingDetail ? (
           <p className="text-sm text-muted-foreground">Đang tải chi tiết vai trò...</p>
         ) : (
-          <>
+          <form id="role-form" onSubmit={onSubmit}>
             <div className="grid grid-cols-2 gap-3.5">
               <FieldBox label="Tên vai trò">
                 <input
                   placeholder="VD: Điều dưỡng"
                   className={boxInputClass}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  aria-invalid={!!form.formState.errors.name}
+                  {...form.register("name")}
                 />
               </FieldBox>
               <FieldBox label="Mô tả">
                 <input
                   placeholder="Mô tả ngắn về vai trò"
                   className={boxInputClass}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  {...form.register("description")}
                 />
               </FieldBox>
             </div>
@@ -174,7 +184,7 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
                     <button
                       key={String(opt.value)}
                       type="button"
-                      onClick={() => setIsActive(opt.value)}
+                      onClick={() => form.setValue("isActive", opt.value)}
                       className="cursor-pointer rounded-full border px-4 py-1.5 text-[12.5px] font-medium transition-[filter] hover:brightness-95"
                       style={
                         active
@@ -264,15 +274,19 @@ export function RoleFormDialog({ open, onOpenChange, roleId, permissions, onSave
                 {submitError}
               </p>
             )}
-          </>
+          </form>
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Huỷ
           </Button>
-          <Button onClick={handleSave} disabled={!canSave || saving}>
-            {saving ? "Đang lưu..." : isEditing ? "Lưu thay đổi" : "Tạo vai trò"}
+          <Button
+            type="submit"
+            form="role-form"
+            disabled={loadingDetail || form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting ? "Đang lưu..." : isEditing ? "Lưu thay đổi" : "Tạo vai trò"}
           </Button>
         </DialogFooter>
       </DialogContent>

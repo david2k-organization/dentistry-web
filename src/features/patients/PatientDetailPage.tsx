@@ -9,10 +9,13 @@ import {
   Trash2,
 } from "lucide-react";
 import { AxiosError } from "axios";
+import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { BookAppointmentDialog } from "@/features/appointments/BookAppointmentDialog";
+import { getSupplies } from "@/features/inventory/api";
+import type { Supply } from "@/features/inventory/types";
 import { deletePatient, getPatient } from "@/features/patients/api";
 import { DeletePatientDialog } from "@/features/patients/DeletePatientDialog";
 import {
@@ -20,21 +23,26 @@ import {
   genderLabels,
   getInitials,
 } from "@/features/patients/format";
-import {
-  getPatientMock,
-  tagBg,
-  tagFg,
-  type PatientHistoryEntry,
-} from "@/features/patients/mock";
+import { getPatientMock, tagBg, tagFg } from "@/features/patients/mock";
 import { PatientFormDialog } from "@/features/patients/PatientFormDialog";
 import { TreatmentDetailDialog } from "@/features/patients/TreatmentDetailDialog";
 import { TreatmentRecordDialog } from "@/features/patients/TreatmentRecordDialog";
 import type { Patient } from "@/features/patients/types";
+import { getServices } from "@/features/services/api";
+import type { Service } from "@/features/services/types";
+import { getTreatmentRecords } from "@/features/treatment-records/api";
+import type { TreatmentRecord } from "@/features/treatment-records/types";
+import { getUsers } from "@/features/users/api";
+import type { User } from "@/features/users/types";
 
 const routeApi = getRouteApi("/_authenticated/patients/$patientId");
 
 const vnd = new Intl.NumberFormat("vi-VN");
 const dong = (amount: number) => `${vnd.format(amount)}đ`;
+
+function toMap<T extends { id: string }>(items: T[]): Record<string, T> {
+  return Object.fromEntries(items.map((it) => [it.id, it]));
+}
 
 export function PatientDetailPage() {
   const { patientId } = routeApi.useParams();
@@ -46,11 +54,17 @@ export function PatientDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
-  const [detailEntry, setDetailEntry] = useState<PatientHistoryEntry | null>(null);
+  const [detailRecord, setDetailRecord] = useState<TreatmentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // Buộc render lại sau khi ghi ca điều trị (dữ liệu mock nằm trong store ngoài React).
-  const [, setRefresh] = useState(0);
+
+  // Hồ sơ điều trị thật + map để tra tên dịch vụ/bác sĩ/vật tư.
+  const [records, setRecords] = useState<TreatmentRecord[]>([]);
+  const [serviceMap, setServiceMap] = useState<Record<string, Service>>({});
+  const [doctorMap, setDoctorMap] = useState<Record<string, User>>({});
+  const [supplyMap, setSupplyMap] = useState<Record<string, Supply>>({});
+  // Tăng để nạp lại danh sách hồ sơ sau khi ghi ca mới.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +84,31 @@ export function PatientDetailPage() {
       cancelled = true;
     };
   }, [patientId]);
+
+  // Nạp hồ sơ điều trị của bệnh nhân + dữ liệu tra cứu tên.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getTreatmentRecords({ patientId, pageSize: 100 }),
+      getServices({ pageSize: 100 }),
+      getUsers({ pageSize: 100 }),
+      getSupplies({ pageSize: 100 }),
+    ])
+      .then(([recordPage, servicePage, userPage, supplyPage]) => {
+        if (cancelled) return;
+        // Backend đã lọc theo patientId và sắp xếp mới nhất trước.
+        setRecords(recordPage.data);
+        setServiceMap(toMap(servicePage.data));
+        setDoctorMap(toMap(userPage.data));
+        setSupplyMap(toMap(supplyPage.data));
+      })
+      .catch(() => {
+        if (!cancelled) setRecords([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId, reload]);
 
   const handleConfirmDelete = async () => {
     if (!patient) return;
@@ -91,8 +130,15 @@ export function PatientDetailPage() {
 
   const notImplemented = () => toast.info("Tính năng đang được phát triển.");
 
+  const serviceOf = (r: TreatmentRecord) => serviceMap[r.serviceId];
+  const priceOf = (r: TreatmentRecord) => Number(serviceOf(r)?.price ?? 0);
+  const serviceName = (r: TreatmentRecord) => serviceOf(r)?.name ?? "Dịch vụ điều trị";
+  const doctorName = (r: TreatmentRecord) => doctorMap[r.doctorId]?.fullName ?? "—";
+  const supplyCount = (r: TreatmentRecord) =>
+    r.treatmentSupplies?.reduce((sum, s) => sum + s.quantity, 0) ?? 0;
+
   const mock = patient ? getPatientMock(patient.id) : null;
-  const lastVisit = mock?.history[0] ?? null;
+  const lastVisit = records[0] ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -193,7 +239,9 @@ export function PatientDetailPage() {
                 <DetailField
                   label="Lần khám gần nhất"
                   value={
-                    lastVisit ? `${lastVisit.date} — ${lastVisit.name}` : "—"
+                    lastVisit
+                      ? `${format(new Date(lastVisit.createdAt), "dd/MM/yyyy")} — ${serviceName(lastVisit)}`
+                      : "—"
                   }
                 />
                 <DetailField label="Địa chỉ" value={mock.address} />
@@ -219,7 +267,7 @@ export function PatientDetailPage() {
                     Hồ sơ điều trị
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {mock.history.length} ca
+                    {records.length} ca
                   </div>
                   <div className="flex-1" />
                   <Button
@@ -233,52 +281,36 @@ export function PatientDetailPage() {
                   </Button>
                 </div>
                 <div className="flex flex-col gap-2.5 px-[18px] py-3.5">
-                  {mock.history.length === 0 && (
+                  {records.length === 0 && (
                     <div className="text-[12.5px] text-muted-foreground">
                       Chưa có ca điều trị nào.
                     </div>
                   )}
-                  {mock.history.map((h, idx) => (
+                  {records.map((r) => (
                     <div
-                      key={idx}
+                      key={r.id}
                       className="rounded-xl border border-[#eef4f3] p-3.5"
                     >
                       <div className="flex gap-3.5">
                         <div className="w-[68px] shrink-0 pt-0.5 text-[12.5px] tabular-nums text-muted-foreground">
-                          {h.date}
+                          {format(new Date(r.createdAt), "dd/MM/yyyy")}
                         </div>
                         <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#3f7a55]" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start gap-2.5">
                             <div className="min-w-0 flex-1 text-[13.5px] font-medium text-foreground">
-                              {h.name}
+                              {serviceName(r)}
                             </div>
-                            <span
-                              className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                              style={{
-                                background:
-                                  h.status === "Hoàn tất" ? "#eef6f1" : "#fdf3e8",
-                                color:
-                                  h.status === "Hoàn tất" ? "#3f7a55" : "#9a6524",
-                              }}
-                            >
-                              {h.status}
-                            </span>
                             <div className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground">
-                              {dong(h.amount)}
+                              {dong(priceOf(r))}
                             </div>
-                          </div>
-                          <div className="mt-1.5">
-                            <span className="rounded-md bg-[#e7f1f0] px-2 py-0.5 text-[11px] font-medium text-[#0a5c57]">
-                              {h.region}
-                            </span>
                           </div>
                           <div className="mt-1.5 text-[12px] text-muted-foreground">
-                            {h.doctor} · {h.materials} vật tư
+                            {doctorName(r)} · {supplyCount(r)} vật tư
                           </div>
                           <button
                             type="button"
-                            onClick={() => setDetailEntry(h)}
+                            onClick={() => setDetailRecord(r)}
                             className="mt-2.5 cursor-pointer rounded-lg border border-[#cfe0df] bg-card px-3 py-1 text-[12px] font-medium text-primary hover:bg-accent"
                           >
                             Xem chi tiết
@@ -307,16 +339,20 @@ export function PatientDetailPage() {
           onOpenChange={setRecordOpen}
           patient={patient}
           patientCode={mock.code}
-          onSaved={() => setRefresh((n) => n + 1)}
+          onSaved={() => setReload((n) => n + 1)}
         />
       )}
 
       {patient && mock && (
         <TreatmentDetailDialog
-          entry={detailEntry}
-          onOpenChange={(open) => !open && setDetailEntry(null)}
+          record={detailRecord}
+          onOpenChange={(open) => !open && setDetailRecord(null)}
           patientName={patient.fullName}
           patientCode={mock.code}
+          serviceName={detailRecord ? serviceName(detailRecord) : ""}
+          doctorName={detailRecord ? doctorName(detailRecord) : ""}
+          price={detailRecord ? priceOf(detailRecord) : 0}
+          supplyMap={supplyMap}
         />
       )}
 

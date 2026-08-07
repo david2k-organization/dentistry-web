@@ -20,6 +20,8 @@ export type PatientHistoryEntry = {
   status: TreatmentStatus;
   followUp: string | null;
   materialsList: TreatmentMaterial[];
+  // Ảnh đính kèm (data URL).
+  images?: string[];
 };
 
 export type PatientInvoiceSummary = {
@@ -198,16 +200,6 @@ export function getPatientMock(id: string): PatientMock {
 /** Cập nhật các trường mock (địa chỉ, dị ứng, trạng thái) khi sửa hồ sơ. */
 export function setPatientMock(id: string, patch: Partial<Pick<PatientMock, "address" | "allergy" | "tag">>): void {
   store.set(id, { ...getPatientMock(id), ...patch });
-}
-
-/** Thêm 1 ca điều trị mới vào đầu lịch sử (dùng khi ghi hồ sơ). */
-export function addPatientTreatment(id: string, entry: PatientHistoryEntry): void {
-  const mock = getPatientMock(id);
-  store.set(id, {
-    ...mock,
-    visits: mock.visits + 1,
-    history: [entry, ...mock.history],
-  });
 }
 
 export const TAG_OPTIONS: PatientTag[] = ["Mới", "Đang điều trị", "Theo dõi", "Hoàn tất"];

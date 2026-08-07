@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Boxes, ChevronDown, Plus, X } from "lucide-react";
 import { AxiosError } from "axios";
 import { format } from "date-fns";
@@ -6,6 +9,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
+import { ImageUpload } from "@/components/ui/ImageUpload";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   Select,
   SelectContent,
@@ -23,13 +28,36 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { createWarehouseLog, getSupplies } from "@/features/inventory/api";
+import { getSupplies } from "@/features/inventory/api";
 import { SUPPLY_UNIT_LABELS } from "@/features/inventory/format";
 import type { Supply } from "@/features/inventory/types";
-import { addPatientTreatment, DOCTORS, type PatientHistoryEntry } from "./mock";
+import { getServices } from "@/features/services/api";
+import type { Service } from "@/features/services/types";
+import { getUsers } from "@/features/users/api";
+import type { User } from "@/features/users/types";
+import { createTreatmentRecord } from "@/features/treatment-records/api";
+import type { TreatmentSupplyInput } from "@/features/treatment-records/types";
 import type { Patient } from "./types";
 
 type MaterialLine = { key: number; suppliesId: string; qty: number };
+
+const treatmentFormSchema = z.object({
+  doctorId: z.string().min(1, "Vui lòng chọn bác sĩ"),
+  serviceId: z.string().min(1, "Vui lòng chọn dịch vụ"),
+  notes: z.string().trim().max(500, "Tối đa 500 ký tự").optional(),
+  followUp: z.date().optional(),
+  images: z.array(z.string()),
+});
+
+type TreatmentFormValues = z.input<typeof treatmentFormSchema>;
+
+const emptyValues: TreatmentFormValues = {
+  doctorId: "",
+  serviceId: "",
+  notes: "",
+  followUp: undefined,
+  images: [],
+};
 
 type TreatmentRecordDialogProps = {
   open: boolean;
@@ -38,12 +66,6 @@ type TreatmentRecordDialogProps = {
   patientCode: string;
   onSaved: () => void;
 };
-
-function todayLabel(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
-}
 
 function Labeled({
   label,
@@ -69,51 +91,87 @@ export function TreatmentRecordDialog({
   patientCode,
   onSaved,
 }: TreatmentRecordDialogProps) {
-  const [doctor, setDoctor] = useState(DOCTORS[0]);
-  const [content, setContent] = useState("");
-  const [tooth, setTooth] = useState("");
-  const [cost, setCost] = useState("");
-  const [notes, setNotes] = useState("");
-  const [followUp, setFollowUp] = useState<Date | undefined>(undefined);
-  const [lines, setLines] = useState<MaterialLine[]>([]);
   const [supplies, setSupplies] = useState<Supply[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  const [doctors, setDoctors] = useState<User[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [selectedServiceName, setSelectedServiceName] = useState("");
+  const [serviceLoading, setServiceLoading] = useState(false);
+  const [lines, setLines] = useState<MaterialLine[]>([]);
+  const serviceSeq = useRef(0);
   // Bộ đếm khóa dòng vật tư — chỉ tăng trong handler (không đụng lúc render).
   const nextKey = useRef(1);
 
-  // Đặt lại form mỗi khi dialog chuyển từ đóng sang mở.
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) {
-      setDoctor(DOCTORS[0]);
-      setContent("");
-      setTooth("");
-      setCost("");
-      setNotes("");
-      setFollowUp(undefined);
-      setLines([{ key: 0, suppliesId: "", qty: 1 }]);
-      setSubmitting(false);
-    }
-  }
+  const form = useForm<TreatmentFormValues>({
+    resolver: zodResolver(treatmentFormSchema),
+    defaultValues: emptyValues,
+  });
 
-  // Nạp danh sách vật tư trong kho khi mở dialog.
+  // Đặt lại form + danh sách vật tư mỗi khi dialog mở.
+  useEffect(() => {
+    if (open) {
+      form.reset(emptyValues);
+      setSelectedServiceName("");
+      setLines([{ key: 0, suppliesId: "", qty: 1 }]);
+      nextKey.current = 1;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Nạp bác sĩ, dịch vụ và vật tư trong kho khi mở dialog.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    getSupplies({ pageSize: 100 })
-      .then((res) => {
-        if (!cancelled) setSupplies(res.data);
+    Promise.all([
+      getUsers({ roleName: "Bác sĩ", pageSize: 100 }),
+      getServices({ pageSize: 100 }),
+      getSupplies({ pageSize: 100 }),
+    ])
+      .then(([doctorPage, servicePage, supplyPage]) => {
+        if (cancelled) return;
+        setDoctors(doctorPage.data);
+        setServices(servicePage.data);
+        setSupplies(supplyPage.data);
+        form.setValue("doctorId", doctorPage.data[0]?.id ?? "");
+        form.setValue("serviceId", servicePage.data[0]?.id ?? "");
+        setSelectedServiceName(servicePage.data[0]?.name ?? "");
       })
       .catch(() => {
-        if (!cancelled) setSupplies([]);
+        if (!cancelled) toast.error("Không thể tải dữ liệu ghi hồ sơ.");
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const supplyOf = (id: string) => supplies.find((s) => s.id === id);
+
+  const doctorId = form.watch("doctorId");
+  const serviceId = form.watch("serviceId");
+  const followUp = form.watch("followUp");
+  const images = form.watch("images");
+
+  const handleSelectService = (id: string) => {
+    form.setValue("serviceId", id);
+    const svc = services.find((s) => s.id === id);
+    if (svc) setSelectedServiceName(svc.name);
+  };
+
+  // Tìm dịch vụ theo tên qua API; bỏ qua phản hồi cũ khi gõ nhanh.
+  const handleServiceSearch = (query: string) => {
+    const seq = ++serviceSeq.current;
+    setServiceLoading(true);
+    getServices({ searchKey: query.trim(), pageSize: 20 })
+      .then((res) => {
+        if (seq === serviceSeq.current) setServices(res.data);
+      })
+      .catch(() => {
+        if (seq === serviceSeq.current) setServices([]);
+      })
+      .finally(() => {
+        if (seq === serviceSeq.current) setServiceLoading(false);
+      });
+  };
 
   const addLine = () =>
     setLines((prev) => [...prev, { key: nextKey.current++, suppliesId: "", qty: 1 }]);
@@ -127,48 +185,34 @@ export function TreatmentRecordDialog({
     const s = supplyOf(l.suppliesId);
     return s ? l.qty > s.quantity : false;
   });
-  const canSave = content.trim() !== "" && !insufficient && !submitting;
 
-  const handleSave = async () => {
-    if (!canSave) return;
-    setSubmitting(true);
+  const onSubmit = form.handleSubmit(async (values) => {
+    if (insufficient) return;
+
+    // API không có field "hẹn tái khám" → gộp vào notes để vẫn lưu được.
+    let notes = values.notes?.trim() ?? "";
+    if (values.followUp) {
+      const line = `Hẹn tái khám: ${format(values.followUp, "dd/MM/yyyy HH:mm")}`;
+      notes = notes ? `${notes}\n${line}` : line;
+    }
+    notes = notes.slice(0, 500);
+
+    const treatmentSupplies: TreatmentSupplyInput[] = exportLines.map((l) => {
+      const s = supplyOf(l.suppliesId)!;
+      return { suppliesId: l.suppliesId, quantity: l.qty, unit: s.unit, note: s.name };
+    });
+
     try {
-      // Xuất kho từng vật tư đã chọn (mỗi phiếu là 1 warehouse log EXPORT).
-      await Promise.all(
-        exportLines.map((l) =>
-          createWarehouseLog({
-            suppliesId: l.suppliesId,
-            type: "EXPORT",
-            quantity: l.qty,
-            note: `Xuất cho ca điều trị: ${content.trim()}`,
-          }),
-        ),
-      );
+      await createTreatmentRecord({
+        patientId: patient.id,
+        doctorId: values.doctorId,
+        serviceId: values.serviceId,
+        notes: notes || undefined,
+        images: values.images.length ? values.images : undefined,
+        treatmentSupplies: treatmentSupplies.length ? treatmentSupplies : undefined,
+      });
 
       const materialsCount = exportLines.reduce((sum, l) => sum + l.qty, 0);
-      const materialsList = exportLines.map((l) => {
-        const s = supplyOf(l.suppliesId)!;
-        return {
-          name: s.name,
-          code: s.code,
-          qty: l.qty,
-          unit: SUPPLY_UNIT_LABELS[s.unit],
-        };
-      });
-      const entry: PatientHistoryEntry = {
-        date: todayLabel(),
-        name: content.trim(),
-        note: notes.trim() || "—",
-        amount: Number(cost) || 0,
-        region: tooth.trim() || "Toàn hàm",
-        doctor,
-        materials: materialsCount,
-        status: "Hoàn tất",
-        followUp: followUp ? format(followUp, "dd/MM/yyyy HH:mm") : null,
-        materialsList,
-      };
-      addPatientTreatment(patient.id, entry);
-
       toast.success(
         materialsCount > 0
           ? `Đã lưu hồ sơ và xuất ${exportLines.length} vật tư khỏi kho`
@@ -182,10 +226,8 @@ export function TreatmentRecordDialog({
           ? (err.response?.data?.message ?? "Không thể lưu hồ sơ.")
           : "Không thể lưu hồ sơ.";
       toast.error(message);
-    } finally {
-      setSubmitting(false);
     }
-  };
+  });
 
   const footerHint =
     exportLines.length > 0
@@ -202,7 +244,11 @@ export function TreatmentRecordDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3.5">
+        <form
+          id="treatment-record-form"
+          onSubmit={onSubmit}
+          className="flex flex-col gap-3.5"
+        >
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <Labeled label="Bệnh nhân">
               <div className="flex h-9 items-center justify-between rounded-lg border border-input bg-muted/40 px-3 text-sm">
@@ -214,61 +260,75 @@ export function TreatmentRecordDialog({
             </Labeled>
 
             <Labeled label="Bác sĩ thực hiện">
-              <Select value={doctor} onValueChange={setDoctor}>
+              <Select value={doctorId} onValueChange={(v) => form.setValue("doctorId", v)}>
                 <SelectTrigger className="h-9 w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Chọn bác sĩ" />
                 </SelectTrigger>
                 <SelectContent>
-                  {DOCTORS.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
+                  {doctors.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.fullName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {form.formState.errors.doctorId && (
+                <p className="mt-1 text-[11px] text-[#a4553a]">
+                  {form.formState.errors.doctorId.message}
+                </p>
+              )}
             </Labeled>
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[2fr_1fr_1fr]">
-            <Labeled label="Nội dung điều trị">
-              <Input
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="VD: Trám composite"
-              />
-            </Labeled>
-            <Labeled label="Răng">
-              <Input
-                value={tooth}
-                onChange={(e) => setTooth(e.target.value)}
-                placeholder="R16"
-              />
-            </Labeled>
-            <Labeled label="Chi phí (đ)">
-              <Input
-                inputMode="numeric"
-                value={cost}
-                onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-                placeholder="400000"
-              />
-            </Labeled>
-          </div>
+          <Labeled label="Dịch vụ điều trị">
+            <SearchableSelect
+              options={services}
+              value={serviceId || null}
+              onChange={handleSelectService}
+              getOptionValue={(s) => s.id}
+              getOptionLabel={(s) => s.name}
+              placeholder="Chọn dịch vụ"
+              searchPlaceholder="Tìm theo tên dịch vụ"
+              emptyMessage="Không tìm thấy dịch vụ."
+              onSearchChange={handleServiceSearch}
+              loading={serviceLoading}
+              selectedLabel={selectedServiceName || undefined}
+            />
+            {form.formState.errors.serviceId && (
+              <p className="mt-1 text-[11px] text-[#a4553a]">
+                {form.formState.errors.serviceId.message}
+              </p>
+            )}
+          </Labeled>
 
           <Labeled label="Diễn biến & dặn dò">
             <Textarea
               rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
               placeholder="Chẩn đoán, thao tác đã làm, dặn dò sau điều trị"
+              aria-invalid={!!form.formState.errors.notes}
+              {...form.register("notes")}
             />
+            {form.formState.errors.notes && (
+              <p className="mt-1 text-[11px] text-[#a4553a]">
+                {form.formState.errors.notes.message}
+              </p>
+            )}
           </Labeled>
 
           <Labeled label="Hẹn tái khám (tuỳ chọn)">
             <DateTimePicker
               value={followUp}
-              onChange={setFollowUp}
+              onChange={(d) => form.setValue("followUp", d)}
               placeholder="Chọn ngày giờ tái khám"
               className="max-w-xs"
+            />
+          </Labeled>
+
+          <Labeled label="Ảnh đính kèm (tối đa 10 ảnh)">
+            <ImageUpload
+              value={images}
+              onChange={(imgs) => form.setValue("images", imgs)}
+              max={10}
             />
           </Labeled>
 
@@ -366,7 +426,7 @@ export function TreatmentRecordDialog({
               })}
             </div>
           </div>
-        </div>
+        </form>
 
         <DialogFooter className="items-center gap-2.5 sm:justify-between">
           <div className="text-[12px] text-muted-foreground">{footerHint}</div>
@@ -374,8 +434,12 @@ export function TreatmentRecordDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Huỷ
             </Button>
-            <Button onClick={handleSave} disabled={!canSave}>
-              {submitting ? "Đang lưu..." : "Lưu hồ sơ & xuất vật tư"}
+            <Button
+              type="submit"
+              form="treatment-record-form"
+              disabled={insufficient || form.formState.isSubmitting}
+            >
+              {form.formState.isSubmitting ? "Đang lưu..." : "Lưu hồ sơ & xuất vật tư"}
             </Button>
           </div>
         </DialogFooter>
