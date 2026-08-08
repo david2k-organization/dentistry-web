@@ -105,14 +105,11 @@ export function InvoiceFormDialog({
   const total = lines.reduce((sum, l) => sum + l.qty * l.price, 0);
   const code = invoice ? invoice.code : nextCode;
 
-  const addService = (service: Service) => {
+  // Bật/tắt một dịch vụ trong danh sách dòng: chưa có thì thêm, đã có thì bỏ.
+  const toggleService = (service: Service) => {
     setLines((prev) => {
       const at = prev.findIndex((l) => l.name === service.name);
-      if (at >= 0) {
-        const next = [...prev];
-        next[at] = { ...next[at], qty: next[at].qty + 1 };
-        return next;
-      }
+      if (at >= 0) return prev.filter((_, i) => i !== at);
       return [...prev, { name: service.name, qty: 1, price: Number(service.price) }];
     });
   };
@@ -239,18 +236,22 @@ export function InvoiceFormDialog({
 
         <div className="mt-2">
           <div className="text-[11.5px] text-muted-foreground">Thêm dịch vụ từ danh mục</div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {services.map((sv) => (
-              <button
-                key={sv.id}
-                type="button"
-                onClick={() => addService(sv)}
-                className="flex cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-[#cfe0df] bg-card px-3 py-1.5 text-xs font-medium text-primary hover:border-solid hover:bg-accent"
-              >
-                <Plus className="size-3.5" />
-                {sv.name}
-              </button>
-            ))}
+          <div className="mt-1.5">
+            <SearchableSelect
+              multiple
+              options={services}
+              value={null}
+              selectedValues={lines.map((l) => l.name)}
+              onChange={(v) => {
+                const sv = services.find((s) => s.name === v);
+                if (sv) toggleService(sv);
+              }}
+              getOptionValue={(sv) => sv.name}
+              getOptionLabel={(sv) => sv.name}
+              placeholder="Chọn dịch vụ"
+              searchPlaceholder="Tìm dịch vụ"
+              emptyMessage="Không tìm thấy dịch vụ."
+            />
           </div>
         </div>
 

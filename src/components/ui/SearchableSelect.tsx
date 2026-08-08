@@ -34,6 +34,8 @@ export type SearchableSelectProps<T> = {
   loading?: boolean;
   debounceMs?: number;
   selectedLabel?: string;
+  multiple?: boolean;
+  selectedValues?: string[];
 };
 
 export function SearchableSelect<T>({
@@ -51,20 +53,30 @@ export function SearchableSelect<T>({
   loading,
   debounceMs = 300,
   selectedLabel,
+  multiple = false,
+  selectedValues,
 }: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pickedLabel, setPickedLabel] = useState<string | null>(null);
 
   const remote = !!onSearchChange;
+  const selectedSet = useMemo(
+    () => new Set(selectedValues ?? []),
+    [selectedValues],
+  );
 
   const selectedOption = options.find((o) => getOptionValue(o) === value);
-  const triggerLabel = selectedOption
-    ? getOptionLabel(selectedOption)
-    : value
-      ? (selectedLabel ?? pickedLabel ?? placeholder)
-      : placeholder;
-  const hasSelection = !!value;
+  const triggerLabel = multiple
+    ? selectedSet.size > 0
+      ? `Đã chọn ${selectedSet.size} mục`
+      : placeholder
+    : selectedOption
+      ? getOptionLabel(selectedOption)
+      : value
+        ? (selectedLabel ?? pickedLabel ?? placeholder)
+        : placeholder;
+  const hasSelection = multiple ? selectedSet.size > 0 : !!value;
 
   const filtered = useMemo(() => {
     if (remote) return options;
@@ -92,7 +104,7 @@ export function SearchableSelect<T>({
   const handleSelect = (option: T) => {
     setPickedLabel(getOptionLabel(option));
     onChange(getOptionValue(option));
-    handleOpenChange(false);
+    if (!multiple) handleOpenChange(false);
   };
 
   return (
@@ -133,7 +145,9 @@ export function SearchableSelect<T>({
           )}
           {filtered.map((option) => {
             const optionValue = getOptionValue(option);
-            const active = optionValue === value;
+            const active = multiple
+              ? selectedSet.has(optionValue)
+              : optionValue === value;
             return (
               <button
                 key={optionValue}
