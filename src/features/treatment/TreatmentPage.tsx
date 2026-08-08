@@ -1,6 +1,18 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type ToothState = "NORMAL" | "DECAY" | "FILLED" | "ROOT_CANAL" | "EXTRACTED";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { getPatients } from "@/features/patients/api";
+import type { Patient } from "@/features/patients/types";
+import type { ToothState } from "@/features/services/types";
+import {
+  getPatientChart,
+  LOWER_LEFT,
+  LOWER_RIGHT,
+  setToothState as persistToothState,
+  UPPER_LEFT,
+  UPPER_RIGHT,
+  type PatientChart,
+} from "./tooth-chart-mock";
 
 const TOOTH_STATE: Record<
   ToothState,
@@ -9,26 +21,25 @@ const TOOTH_STATE: Record<
   NORMAL: { label: "Bình thường", bg: "#ffffff", border: "#cfe0df", fg: "#4a6664" },
   DECAY: { label: "Sâu răng", bg: "#fdf3e8", border: "#e9c893", fg: "#9a6524" },
   FILLED: { label: "Đã trám", bg: "#e7f1f0", border: "#8fc4be", fg: "#0f7a73" },
-  ROOT_CANAL: { label: "Điều trị tủy", bg: "#ece9f5", border: "#c3bce0", fg: "#5468a8" },
+  CROWN: { label: "Đã bọc mão sứ", bg: "#fdf6e3", border: "#e6d38a", fg: "#8a6d1f" },
+  ROOT_CANAL: { label: "Đã điều trị tủy", bg: "#ece9f5", border: "#c3bce0", fg: "#5468a8" },
   EXTRACTED: { label: "Đã nhổ", bg: "#fbeeea", border: "#e6cdbf", fg: "#a4553a" },
+  IMPLANT: { label: "Implant", bg: "#e8f1fb", border: "#b8d4f0", fg: "#2f6a9e" },
+  MISSING: { label: "Thiếu răng", bg: "#f1f5f5", border: "#dde8e7", fg: "#7e9997" },
+  VENEER: { label: "Dán sứ", bg: "#fbeaf0", border: "#eec3d6", fg: "#a4467a" },
 };
 
-const STATE_ORDER: ToothState[] = ["NORMAL", "DECAY", "FILLED", "ROOT_CANAL", "EXTRACTED"];
-
-// Đánh số răng theo hệ FDI
-const upperRight = [18, 17, 16, 15, 14, 13, 12, 11];
-const upperLeft = [21, 22, 23, 24, 25, 26, 27, 28];
-const lowerRight = [48, 47, 46, 45, 44, 43, 42, 41];
-const lowerLeft = [31, 32, 33, 34, 35, 36, 37, 38];
-
-const initialStates: Record<number, ToothState> = {
-  11: "FILLED",
-  16: "FILLED",
-  24: "DECAY",
-  26: "DECAY",
-  36: "ROOT_CANAL",
-  47: "EXTRACTED",
-};
+const STATE_ORDER: ToothState[] = [
+  "NORMAL",
+  "DECAY",
+  "FILLED",
+  "CROWN",
+  "ROOT_CANAL",
+  "EXTRACTED",
+  "IMPLANT",
+  "MISSING",
+  "VENEER",
+];
 
 const toothNames: Record<number, string> = {
   1: "Răng cửa giữa",
@@ -41,24 +52,6 @@ const toothNames: Record<number, string> = {
   8: "Răng khôn",
 };
 const toothName = (num: number) => toothNames[num % 10] ?? "Răng";
-
-type PlanItem = {
-  tooth: string;
-  name: string;
-  note: string;
-  price: number;
-  done: boolean;
-};
-
-const initialPlan: PlanItem[] = [
-  { tooth: "26", name: "Trám răng sâu Composite", note: "Mặt nhai", price: 400_000, done: false },
-  { tooth: "36", name: "Điều trị tủy + trám bít", note: "Răng 3 chân", price: 2_500_000, done: true },
-  { tooth: "47", name: "Cấy ghép Implant", note: "Trụ Hàn Quốc", price: 18_000_000, done: false },
-  { tooth: "16", name: "Bọc mão sứ Titan", note: "Sau điều trị tủy", price: 3_000_000, done: false },
-];
-
-const vnd = new Intl.NumberFormat("vi-VN");
-const formatVnd = (n: number) => `${vnd.format(n)} đ`;
 
 function ToothButton({
   num,
@@ -94,15 +87,52 @@ function ToothButton({
 }
 
 export function TreatmentPage() {
-  const [states, setStates] = useState<Record<number, ToothState>>(initialStates);
-  const [selected, setSelected] = useState<number | null>(26);
-  const [plan, setPlan] = useState<PlanItem[]>(initialPlan);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientLoading, setPatientLoading] = useState(false);
+  const patientSeq = useRef(0);
 
-  const stateOf = (num: number): ToothState => states[num] ?? "NORMAL";
-  const setToothState = (num: number, state: ToothState) =>
-    setStates((prev) => ({ ...prev, [num]: state }));
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedPatientName, setSelectedPatientName] = useState("");
+  const [chart, setChart] = useState<PatientChart | null>(null);
+  const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
 
-  const planTotal = plan.reduce((sum, p) => sum + p.price, 0);
+  // Nạp sẵn một trang bệnh nhân để có gợi ý trước khi gõ tìm kiếm.
+  useEffect(() => {
+    getPatients({ pageSize: 20 })
+      .then((res) => setPatients(res.data))
+      .catch(() => setPatients([]));
+  }, []);
+
+  // Tìm bệnh nhân theo tên/SĐT qua API; bỏ qua phản hồi cũ khi gõ nhanh.
+  const handlePatientSearch = (query: string) => {
+    const seq = ++patientSeq.current;
+    setPatientLoading(true);
+    getPatients({ searchKey: query.trim(), pageSize: 20 })
+      .then((res) => {
+        if (seq === patientSeq.current) setPatients(res.data);
+      })
+      .catch(() => {
+        if (seq === patientSeq.current) setPatients([]);
+      })
+      .finally(() => {
+        if (seq === patientSeq.current) setPatientLoading(false);
+      });
+  };
+
+  const handleSelectPatient = (id: string) => {
+    setSelectedPatientId(id);
+    setSelectedPatientName(patients.find((p) => p.id === id)?.fullName ?? "");
+    setChart(getPatientChart(id));
+    setSelectedTooth(null);
+  };
+
+  const stateOf = (num: number): ToothState => chart?.states[num] ?? "NORMAL";
+  const toothHistory = selectedTooth != null ? (chart?.history[selectedTooth] ?? []) : [];
+
+  const handleSetToothState = (num: number, state: ToothState) => {
+    if (!selectedPatientId) return;
+    setChart(persistToothState(selectedPatientId, num, state));
+  };
 
   const renderRow = (nums: number[], lower: boolean) =>
     nums.map((num) => (
@@ -111,19 +141,33 @@ export function TreatmentPage() {
         num={num}
         lower={lower}
         state={stateOf(num)}
-        selected={selected === num}
-        onClick={() => setSelected(num)}
+        selected={selectedTooth === num}
+        onClick={() => setSelectedTooth(num)}
       />
     ));
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.35fr_1fr]">
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
       {/* Sơ đồ răng */}
       <div className="rounded-[14px] border border-border bg-card p-[18px]">
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-          <div className="text-[14.5px] font-semibold text-foreground">
-            Sơ đồ răng — Nguyễn Văn Long
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2.5">
+          <div className="shrink-0 text-[14.5px] font-semibold text-foreground">
+            Sơ đồ răng
           </div>
+          <SearchableSelect
+            options={patients}
+            value={selectedPatientId}
+            onChange={handleSelectPatient}
+            getOptionValue={(p) => p.id}
+            getOptionLabel={(p) => p.fullName}
+            placeholder="Chọn bệnh nhân"
+            searchPlaceholder="Tìm theo tên hoặc số điện thoại"
+            emptyMessage="Không tìm thấy bệnh nhân."
+            onSearchChange={handlePatientSearch}
+            loading={patientLoading}
+            selectedLabel={selectedPatientName || undefined}
+            className="w-[220px]"
+          />
           <div className="flex-1" />
           <div className="flex flex-wrap gap-3 text-[11.5px] text-muted-foreground">
             {STATE_ORDER.map((st) => (
@@ -141,108 +185,112 @@ export function TreatmentPage() {
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-2.5 rounded-xl border border-[#eaf3f2] bg-[#f7fbfa] px-1.5 py-[18px]">
-          <div className="text-center text-[11px] tracking-[0.08em] text-[#9fb3b1]">HÀM TRÊN</div>
-          <div className="flex justify-center gap-4">
-            <div className="flex gap-1">{renderRow(upperRight, false)}</div>
-            <div className="flex gap-1">{renderRow(upperLeft, false)}</div>
-          </div>
-          <div className="mx-10 my-1.5 h-px bg-[#dfeceb]" />
-          <div className="flex justify-center gap-4">
-            <div className="flex gap-1">{renderRow(lowerRight, true)}</div>
-            <div className="flex gap-1">{renderRow(lowerLeft, true)}</div>
-          </div>
-          <div className="text-center text-[11px] tracking-[0.08em] text-[#9fb3b1]">HÀM DƯỚI</div>
-        </div>
-
-        {/* Panel răng đang chọn */}
-        <div className="mt-[18px] border-t border-[#f0f5f4] pt-4">
-          {selected == null ? (
-            <div className="text-[12.5px] text-muted-foreground">
-              Chọn một răng trên sơ đồ để ghi nhận hiện trạng và thêm vào kế hoạch điều trị.
+        {!selectedPatientId || !chart ? (
+          <div className="mt-5 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[#dfeceb] bg-[#f7fbfa] px-4 py-16 text-center">
+            <div className="text-[13px] font-medium text-foreground">
+              Chưa chọn bệnh nhân
             </div>
-          ) : (
-            <div>
-              <div className="flex items-baseline gap-2.5">
-                <div className="text-sm font-semibold text-foreground">Răng {selected}</div>
+            <div className="text-[12.5px] text-muted-foreground">
+              Chọn một bệnh nhân ở trên để xem sơ đồ răng.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mt-5 flex flex-col gap-2.5 rounded-xl border border-[#eaf3f2] bg-[#f7fbfa] px-1.5 py-[18px]">
+              <div className="text-center text-[11px] tracking-[0.08em] text-[#9fb3b1]">HÀM TRÊN</div>
+              <div className="flex justify-center gap-4">
+                <div className="flex gap-1">{renderRow(UPPER_RIGHT, false)}</div>
+                <div className="flex gap-1">{renderRow(UPPER_LEFT, false)}</div>
+              </div>
+              <div className="mx-10 my-1.5 h-px bg-[#dfeceb]" />
+              <div className="flex justify-center gap-4">
+                <div className="flex gap-1">{renderRow(LOWER_RIGHT, true)}</div>
+                <div className="flex gap-1">{renderRow(LOWER_LEFT, true)}</div>
+              </div>
+              <div className="text-center text-[11px] tracking-[0.08em] text-[#9fb3b1]">HÀM DƯỚI</div>
+            </div>
+
+            {/* Panel răng đang chọn */}
+            <div className="mt-[18px] border-t border-[#f0f5f4] pt-4">
+              {selectedTooth == null ? (
                 <div className="text-[12.5px] text-muted-foreground">
-                  {toothName(selected)} · hiện trạng: {TOOTH_STATE[stateOf(selected)].label}
+                  Chọn một răng trên sơ đồ để ghi nhận hiện trạng.
                 </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {STATE_ORDER.map((st) => {
-                  const active = stateOf(selected) === st;
-                  return (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setToothState(selected, st)}
-                      className="cursor-pointer rounded-[9px] border px-[13px] py-[7px] text-[12.5px] font-medium transition-[filter] hover:brightness-95"
-                      style={{
-                        background: active ? TOOTH_STATE[st].bg : "#ffffff",
-                        color: active ? TOOTH_STATE[st].fg : "#4a6664",
-                        borderColor: active ? TOOTH_STATE[st].border : "#dde8e7",
-                      }}
-                    >
-                      {TOOTH_STATE[st].label}
-                    </button>
-                  );
-                })}
-              </div>
+              ) : (
+                <div>
+                  <div className="flex items-baseline gap-2.5">
+                    <div className="text-sm font-semibold text-foreground">Răng {selectedTooth}</div>
+                    <div className="text-[12.5px] text-muted-foreground">
+                      {toothName(selectedTooth)} · hiện trạng: {TOOTH_STATE[stateOf(selectedTooth)].label}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {STATE_ORDER.map((st) => {
+                      const active = stateOf(selectedTooth) === st;
+                      return (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => handleSetToothState(selectedTooth, st)}
+                          className="cursor-pointer rounded-[9px] border px-[13px] py-[7px] text-[12.5px] font-medium transition-[filter] hover:brightness-95"
+                          style={{
+                            background: active ? TOOTH_STATE[st].bg : "#ffffff",
+                            color: active ? TOOTH_STATE[st].fg : "#4a6664",
+                            borderColor: active ? TOOTH_STATE[st].border : "#dde8e7",
+                          }}
+                        >
+                          {TOOTH_STATE[st].label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Lịch sử thay đổi */}
+      <div className="overflow-hidden rounded-[14px] border border-border bg-card">
+        <div className="border-b border-[#e6efee] px-[18px] py-[15px]">
+          <div className="text-[14.5px] font-semibold text-foreground">Lịch sử thay đổi</div>
+          {selectedPatientId && selectedTooth != null && (
+            <div className="mt-0.5 text-[12px] text-muted-foreground">
+              Răng {selectedTooth} · {toothName(selectedTooth)}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Kế hoạch điều trị */}
-      <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-        <div className="flex items-center gap-2.5 border-b border-[#e6efee] px-[18px] py-[15px]">
-          <div className="text-[14.5px] font-semibold text-foreground">Kế hoạch điều trị</div>
-          <div className="flex-1" />
-          <div className="text-[12.5px] text-muted-foreground tabular-nums">
-            Tổng {formatVnd(planTotal)}
-          </div>
-        </div>
-
-        {plan.map((p, idx) => (
-          <div
-            key={idx}
-            className="flex items-center gap-3 border-b border-[#f0f5f4] px-[18px] py-[13px]"
-          >
-            <div className="grid size-[34px] shrink-0 place-items-center rounded-[9px] border border-[#e2eeed] bg-[#f2f8f7] text-[11.5px] font-semibold tabular-nums text-primary">
-              {p.tooth}
+        <div className="px-[18px] py-3.5">
+          {!selectedPatientId ? (
+            <div className="py-8 text-center text-[12.5px] text-muted-foreground">
+              Chọn bệnh nhân để xem lịch sử thay đổi.
             </div>
-            <div className="min-w-0 flex-1 leading-snug">
-              <div className="text-[13px] font-medium text-foreground">{p.name}</div>
-              <div className="text-[11.5px] text-muted-foreground">{p.note}</div>
+          ) : selectedTooth == null ? (
+            <div className="py-8 text-center text-[12.5px] text-muted-foreground">
+              Chọn một răng trên sơ đồ để xem lịch sử thay đổi.
             </div>
-            <div className="text-[12.5px] font-medium tabular-nums text-foreground">
-              {formatVnd(p.price)}
+          ) : toothHistory.length === 0 ? (
+            <div className="py-8 text-center text-[12.5px] text-muted-foreground">
+              Chưa có lịch sử thay đổi cho răng này.
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                setPlan((prev) => prev.map((it, i) => (i === idx ? { ...it, done: !it.done } : it)))
-              }
-              className="min-w-[84px] cursor-pointer rounded-full border px-2.5 py-1.5 text-[11.5px] font-medium transition-[filter] hover:brightness-95"
-              style={
-                p.done
-                  ? { background: "#eef6f1", borderColor: "#cfe7d9", color: "#3f7a55" }
-                  : { background: "#ffffff", borderColor: "#dde8e7", color: "#7e9997" }
-              }
-            >
-              {p.done ? "Hoàn tất" : "Chờ làm"}
-            </button>
-          </div>
-        ))}
-
-        <div className="flex gap-2.5 px-[18px] py-3.5">
-          <button
-            type="button"
-            className="cursor-pointer rounded-[10px] bg-primary px-[15px] py-2.5 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-[color-mix(in_oklch,var(--primary),black_18%)]"
-          >
-            Xuất hoá đơn từ kế hoạch
-          </button>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {[...toothHistory].reverse().map((entry, idx) => (
+                <div key={idx} className="flex items-center gap-2.5 text-[12.5px]">
+                  <span
+                    className="size-[7px] shrink-0 rounded-full"
+                    style={{ background: TOOTH_STATE[entry.state].fg }}
+                  />
+                  <span className="font-medium text-foreground">
+                    {TOOTH_STATE[entry.state].label}
+                  </span>
+                  <span className="text-muted-foreground">· {entry.date}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

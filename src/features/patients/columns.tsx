@@ -1,17 +1,22 @@
-import { createColumnHelper } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
+import { createColumnHelper } from "@tanstack/react-table";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 
 import { iconActionButtonClass } from "@/lib/utils";
-import { calculateAge, formatCurrency, genderLabels, getInitials } from "./format";
-import { getPatientMock, tagBg, tagFg } from "./mock";
+import {
+  calculateAge,
+  formatCurrency,
+  genderLabels,
+  getInitials,
+} from "./format";
+import { getPatientMock } from "./mock";
 import type { Patient } from "./types";
 
 const columnHelper = createColumnHelper<Patient>();
 
 export function createPatientColumns(
   onRequestEdit: (patient: Patient) => void,
-  onRequestDelete: (patient: Patient) => void
+  onRequestDelete: (patient: Patient) => void,
 ) {
   return [
     columnHelper.accessor("fullName", {
@@ -29,9 +34,14 @@ export function createPatientColumns(
               {getInitials(patient.fullName)}
             </div>
             <div className="min-w-0 leading-tight">
-              <div className="truncate font-medium text-foreground">{patient.fullName}</div>
+              <div className="truncate font-medium text-foreground">
+                {patient.fullName}
+              </div>
               <div className="text-[11.5px] text-muted-foreground">
-                {mock.code} · {patient.gender ? genderLabels[patient.gender] : "Chưa rõ giới tính"}
+                {mock.code} ·{" "}
+                {patient.gender
+                  ? genderLabels[patient.gender]
+                  : "Chưa rõ giới tính"}
               </div>
             </div>
           </Link>
@@ -41,14 +51,18 @@ export function createPatientColumns(
     columnHelper.accessor("phone", {
       header: "Số điện thoại",
       cell: (info) => (
-        <span className="tabular-nums text-[#4a6664]">{info.getValue() ?? "—"}</span>
+        <span className="tabular-nums text-[#4a6664]">
+          {info.getValue() ?? "—"}
+        </span>
       ),
     }),
     columnHelper.accessor("dateOfBirth", {
       header: "Tuổi",
       cell: (info) => {
         const age = calculateAge(info.getValue());
-        return <span className="tabular-nums text-[#4a6664]">{age ?? "—"}</span>;
+        return (
+          <span className="tabular-nums text-[#4a6664]">{age ?? "—"}</span>
+        );
       },
     }),
     columnHelper.display({
@@ -75,21 +89,6 @@ export function createPatientColumns(
             style={{ color: mock.debt ? "#a4553a" : "#a3b3b2" }}
           >
             {mock.debt ? formatCurrency(mock.debt) : "—"}
-          </span>
-        );
-      },
-    }),
-    columnHelper.display({
-      id: "tag",
-      header: "Trạng thái",
-      cell: (info) => {
-        const mock = getPatientMock(info.row.original.id);
-        return (
-          <span
-            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px] font-medium"
-            style={{ background: tagBg(mock.tag), color: tagFg(mock.tag) }}
-          >
-            {mock.tag}
           </span>
         );
       },

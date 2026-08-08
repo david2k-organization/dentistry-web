@@ -21,7 +21,6 @@ function normalize(value: string) {
 
 export type SearchableSelectProps<T> = {
   options: T[];
-  /** Giá trị đang chọn (khớp với `getOptionValue`); phải là duy nhất giữa các option. */
   value: string | null;
   onChange: (value: string) => void;
   getOptionValue: (option: T) => string;
@@ -30,21 +29,10 @@ export type SearchableSelectProps<T> = {
   searchPlaceholder?: string;
   emptyMessage?: string;
   disabled?: boolean;
-  /** Class cho nút trigger (VD: chỉnh chiều rộng). */
   className?: string;
-  /**
-   * Bật chế độ tìm kiếm phía server: mỗi khi từ khóa đổi (đã debounce) sẽ gọi
-   * callback này thay vì lọc `options` tại chỗ. Cha tự fetch và cập nhật `options`.
-   */
   onSearchChange?: (query: string) => void;
-  /** Đang tải kết quả (dùng với `onSearchChange`). */
   loading?: boolean;
-  /** Độ trễ debounce (ms) cho `onSearchChange`. */
   debounceMs?: number;
-  /**
-   * Nhãn của giá trị đang chọn — dùng khi option đó có thể không nằm trong
-   * `options` hiện tại (thường gặp ở chế độ server-search sau khi lọc).
-   */
   selectedLabel?: string;
 };
 
@@ -122,9 +110,9 @@ export function SearchableSelect<T>({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-(--radix-popover-trigger-width) gap-0 p-0"
+        className="w-(--radix-popover-trigger-width) max-h-(--radix-popover-content-available-height) gap-0 overflow-hidden p-0"
       >
-        <div className="flex items-center gap-2 border-b border-border px-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-2.5">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             autoFocus
@@ -137,7 +125,7 @@ export function SearchableSelect<T>({
             <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
           )}
         </div>
-        <div className="max-h-56 overflow-y-auto p-1">
+        <div className="min-h-0 max-h-56 overflow-y-auto p-1">
           {!loading && filtered.length === 0 && (
             <div className="px-2 py-4 text-center text-[12.5px] text-muted-foreground">
               {emptyMessage}

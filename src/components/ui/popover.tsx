@@ -2,6 +2,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useDialogContentContainer } from "@/components/ui/dialog"
 
 function Popover({
   ...props
@@ -21,8 +22,11 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  // Portal vào bên trong Dialog đang mở (nếu có) thay vì document.body, để tránh bị
+  // react-remove-scroll chặn cuộn (xem giải thích ở DialogContentContainerContext).
+  const dialogContainer = useDialogContentContainer()
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={dialogContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

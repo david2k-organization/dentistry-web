@@ -45,6 +45,17 @@ function DialogOverlay({
   )
 }
 
+// Radix Dialog khoá scroll toàn trang (react-remove-scroll) khi mở, và chỉ cho phép cuộn
+// các phần tử NẰM TRONG DOM của chính Dialog. Popover/SearchableSelect lại portal ra
+// document.body theo mặc định (ngoài DOM của Dialog) nên bị chặn cuộn dù CSS đúng. Context
+// này expose DOM node của DialogContent để Popover có thể portal vào bên trong thay vì body.
+const DialogContentContainerContext = React.createContext<HTMLElement | null>(null)
+
+/** Dùng để portal Popover/dropdown vào bên trong Dialog đang mở gần nhất (nếu có), giúp cuộn được. */
+export function useDialogContentContainer() {
+  return React.useContext(DialogContentContainerContext)
+}
+
 function DialogContent({
   className,
   children,
@@ -53,18 +64,22 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const [container, setContainer] = React.useState<HTMLElement | null>(null)
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        ref={setContainer}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
-        {children}
+        <DialogContentContainerContext.Provider value={container}>
+          {children}
+        </DialogContentContainerContext.Provider>
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button
