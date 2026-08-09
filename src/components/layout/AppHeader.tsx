@@ -4,6 +4,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { clearTokens } from "@/features/auth/auth-storage";
+import { NotificationPanel } from "@/features/notifications/NotificationPanel";
+import { mockNotifications } from "@/features/notifications/data";
 
 const TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p === "/", title: "Tổng quan" },
@@ -44,10 +47,20 @@ export function AppHeader() {
   const navigate = useNavigate();
   const screenTitle = useScreenTitle();
   const [search, setSearch] = useState("");
+  const [notifications, setNotifications] = useState(mockNotifications);
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleLogout = () => {
     clearTokens();
     navigate({ to: "/login" });
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const handleNotificationClick = (id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
 
   return (
@@ -81,10 +94,21 @@ export function AppHeader() {
         Đặt hẹn
       </Button>
 
-      <Button variant="ghost" size="icon" className="relative" aria-label="Thông báo">
-        <Bell />
-        <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive ring-2 ring-card" />
-      </Button>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative" aria-label="Thông báo">
+            <Bell />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive ring-2 ring-card" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <NotificationPanel
+          notifications={notifications}
+          onMarkAllRead={handleMarkAllRead}
+          onItemClick={handleNotificationClick}
+        />
+      </Popover>
 
       {/* Người dùng */}
       <DropdownMenu>
