@@ -14,8 +14,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { Invoice } from "./types";
-import { invoiceTotal } from "./types";
+import type { Order } from "./types";
+import { orderTotal } from "./types";
 
 const vnd = new Intl.NumberFormat("vi-VN");
 const fmt = (n: number) => `${vnd.format(n)} đ`;
@@ -32,7 +32,7 @@ type CancelFormValues = z.input<typeof cancelFormSchema>;
 const emptyValues: CancelFormValues = { reason: REASONS[0], note: "" };
 
 type CancelInvoiceDialogProps = {
-  invoice: Invoice | null;
+  invoice: Order | null;
   onOpenChange: (open: boolean) => void;
   onConfirm: (reason: string, note: string) => void;
 };
@@ -68,7 +68,7 @@ export function CancelInvoiceDialog({
           <DialogTitle>Huỷ hoá đơn {invoice?.code}?</DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-[#5c7a78]">
             {invoice &&
-              `Hoá đơn ${fmt(invoiceTotal(invoice))} của ${invoice.patient} sẽ chuyển sang trạng thái Đã huỷ và không còn tính vào doanh thu. Hồ sơ vẫn giữ lại để đối chiếu.`}
+              `Hoá đơn ${fmt(orderTotal(invoice))} của ${invoice.patient?.fullName ?? "bệnh nhân"} sẽ chuyển sang trạng thái Đã huỷ và không còn tính vào doanh thu. Hồ sơ vẫn giữ lại để đối chiếu.`}
           </DialogDescription>
         </DialogHeader>
 
