@@ -30,8 +30,18 @@ export function createPatientColumns(
             params={{ patientId: patient.id }}
             className="flex min-w-0 items-center gap-2.5"
           >
-            <div className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-primary">
-              {getInitials(patient.fullName)}
+            <div className="size-8 shrink-0 overflow-hidden rounded-full bg-accent">
+              {(patient.avatar ?? mock.avatar) ? (
+                <img
+                  src={(patient.avatar ?? mock.avatar) as string}
+                  alt={patient.fullName}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <div className="grid size-full place-items-center text-xs font-semibold text-primary">
+                  {getInitials(patient.fullName)}
+                </div>
+              )}
             </div>
             <div className="min-w-0 leading-tight">
               <div className="truncate font-medium text-foreground">

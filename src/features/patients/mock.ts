@@ -42,6 +42,8 @@ export type PatientMock = {
   debt: number;
   history: PatientHistoryEntry[];
   invoices: PatientInvoiceSummary[];
+  // Ảnh đại diện (data URL) — backend chưa có endpoint upload, lưu tạm trong bộ nhớ.
+  avatar: string | null;
 };
 
 function hashString(value: string): number {
@@ -184,6 +186,7 @@ function generate(id: string): PatientMock {
     debt: hasDebt ? (1 + Math.floor(rng() * 20)) * 100_000 : 0,
     history,
     invoices,
+    avatar: null,
   };
 }
 
@@ -197,8 +200,11 @@ export function getPatientMock(id: string): PatientMock {
   return mock;
 }
 
-/** Cập nhật các trường mock (địa chỉ, dị ứng, trạng thái) khi sửa hồ sơ. */
-export function setPatientMock(id: string, patch: Partial<Pick<PatientMock, "address" | "allergy" | "tag">>): void {
+/** Cập nhật các trường mock (địa chỉ, dị ứng, trạng thái, ảnh đại diện) khi sửa hồ sơ. */
+export function setPatientMock(
+  id: string,
+  patch: Partial<Pick<PatientMock, "address" | "allergy" | "tag" | "avatar">>,
+): void {
   store.set(id, { ...getPatientMock(id), ...patch });
 }
 

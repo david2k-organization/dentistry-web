@@ -163,8 +163,18 @@ export function PatientDetailPage() {
       {patient && mock && (
         <>
           <div className="flex flex-wrap items-center gap-4 rounded-[14px] border border-border bg-card p-[22px]">
-            <div className="grid size-[58px] shrink-0 place-items-center rounded-full bg-accent text-lg font-semibold text-primary">
-              {getInitials(patient.fullName)}
+            <div className="size-[58px] shrink-0 overflow-hidden rounded-full bg-accent">
+              {(patient.avatar ?? mock.avatar) ? (
+                <img
+                  src={(patient.avatar ?? mock.avatar) as string}
+                  alt={patient.fullName}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <div className="grid size-full place-items-center text-lg font-semibold text-primary">
+                  {getInitials(patient.fullName)}
+                </div>
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2.5">

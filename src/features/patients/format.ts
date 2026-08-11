@@ -80,3 +80,13 @@ export function dateToDateOnlyString(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+// Đọc file ảnh thành data URL để hiển thị/lưu tạm (backend chưa có endpoint upload).
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Không đọc được ảnh"));
+    reader.readAsDataURL(file);
+  });
+}

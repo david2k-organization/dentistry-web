@@ -1,11 +1,11 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AxiosError } from "axios";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ImagePlus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -23,6 +23,8 @@ import {
   dateOnlyStringToDate,
   dateOnlyToIsoWithOffset,
   dateToDateOnlyString,
+  fileToDataUrl,
+  getInitials,
   isoToDateInputValue,
 } from "./format";
 import { getPatientMock, setPatientMock, TAG_OPTIONS, type PatientTag } from "./mock";
@@ -121,6 +123,9 @@ function FieldBox({
 const boxInputClass =
   "flex-1 min-w-0 border-0 bg-transparent py-2.5 font-sans text-[13px] text-foreground outline-none placeholder:text-muted-foreground";
 
+// Giới hạn kích thước ảnh đại diện (lưu dưới dạng data URL trong bộ nhớ).
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
 export function PatientFormDialog({
   open,
   onOpenChange,
@@ -132,6 +137,9 @@ export function PatientFormDialog({
   const [address, setAddress] = useState("");
   const [allergy, setAllergy] = useState("");
   const [tag, setTag] = useState<PatientTag>("Mới");
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!patient;
 
   const form = useForm<PatientFormValues>({
@@ -143,10 +151,12 @@ export function PatientFormDialog({
     if (open) {
       form.reset(patient ? valuesFromPatient(patient) : emptyValues);
       setSubmitError(null);
+      setAvatarError(null);
       const mock = patient ? getPatientMock(patient.id) : null;
       setAddress(mock?.address ?? "");
       setAllergy(mock?.allergy ?? "Không ghi nhận");
       setTag(mock?.tag ?? "Mới");
+      setAvatar(patient?.avatar ?? mock?.avatar ?? null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, patient]);
@@ -155,8 +165,30 @@ export function PatientFormDialog({
     onOpenChange(nextOpen);
   };
 
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Cho phép chọn lại cùng một file sau khi xoá.
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Vui lòng chọn tệp ảnh.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError("Ảnh tối đa 2MB.");
+      return;
+    }
+    try {
+      setAvatar(await fileToDataUrl(file));
+      setAvatarError(null);
+    } catch {
+      setAvatarError("Không đọc được ảnh, vui lòng thử lại.");
+    }
+  };
+
   const dateOfBirth = form.watch("dateOfBirth");
   const gender = form.watch("gender");
+  const fullName = form.watch("fullName");
 
   const onSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);
@@ -170,7 +202,7 @@ export function PatientFormDialog({
         ? dateOnlyToIsoWithOffset(values.dateOfBirth)
         : undefined,
     };
-    const mockPatch = { address: address.trim() || "Chưa cập nhật", allergy, tag };
+    const mockPatch = { address: address.trim() || "Chưa cập nhật", allergy, tag, avatar };
     try {
       if (patient) {
         await updatePatient(patient.id, payload);
@@ -183,6 +215,7 @@ export function PatientFormDialog({
           gender: payload.gender ?? null,
           notes: payload.notes ?? null,
           dateOfBirth: payload.dateOfBirth ?? null,
+          avatar,
         });
       } else {
         const created = await createPatient(payload);
@@ -213,6 +246,66 @@ export function PatientFormDialog({
         </DialogHeader>
 
         <form id="patient-form" onSubmit={onSubmit}>
+          <div className="mb-3.5 flex items-center gap-3.5">
+            <div className="size-[58px] shrink-0 overflow-hidden rounded-full bg-accent">
+              {avatar ? (
+                <img
+                  src={avatar}
+                  alt="Ảnh đại diện bệnh nhân"
+                  className="size-full object-cover"
+                />
+              ) : (
+                <div className="grid size-full place-items-center text-lg font-semibold text-primary">
+                  {fullName ? getInitials(fullName) : "BN"}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] text-muted-foreground">Ảnh đại diện</div>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="size-4" />
+                  {avatar ? "Đổi ảnh" : "Tải ảnh lên"}
+                </Button>
+                {avatar && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-[#a4553a] hover:text-[#a4553a]"
+                    onClick={() => {
+                      setAvatar(null);
+                      setAvatarError(null);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                    Xoá ảnh
+                  </Button>
+                )}
+              </div>
+              {avatarError ? (
+                <div className="mt-1 text-[11px] text-[#a4553a]">{avatarError}</div>
+              ) : (
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  JPG, PNG — tối đa 2MB
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3.5">
             <FieldBox
               label="Họ và tên"
