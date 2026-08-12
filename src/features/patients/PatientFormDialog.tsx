@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { uploadImageViaPresign } from "@/features/media/api";
 import { createPatient, updatePatient } from "./api";
 import {
   dateOnlyStringToDate,
@@ -138,6 +139,8 @@ export function PatientFormDialog({
   const [allergy, setAllergy] = useState("");
   const [tag, setTag] = useState<PatientTag>("Mới");
   const [avatar, setAvatar] = useState<string | null>(null);
+  // File ảnh mới vừa chọn, sẽ upload lên S3 (presigned URL) khi bấm Lưu.
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!patient;
@@ -157,6 +160,7 @@ export function PatientFormDialog({
       setAllergy(mock?.allergy ?? "Không ghi nhận");
       setTag(mock?.tag ?? "Mới");
       setAvatar(patient?.avatar ?? mock?.avatar ?? null);
+      setAvatarFile(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, patient]);
@@ -179,7 +183,9 @@ export function PatientFormDialog({
       return;
     }
     try {
+      // Hiển thị preview ngay bằng data URL; ảnh sẽ được upload lên S3 khi Lưu.
       setAvatar(await fileToDataUrl(file));
+      setAvatarFile(file);
       setAvatarError(null);
     } catch {
       setAvatarError("Không đọc được ảnh, vui lòng thử lại.");
@@ -192,6 +198,20 @@ export function PatientFormDialog({
 
   const onSubmit = form.handleSubmit(async (values) => {
     setSubmitError(null);
+
+    // Có ảnh mới → upload lên S3 qua presigned URL, lấy URL public để lưu.
+    let avatarUrl = avatar;
+    if (avatarFile) {
+      try {
+        avatarUrl = await uploadImageViaPresign(avatarFile);
+        setAvatar(avatarUrl);
+        setAvatarFile(null);
+      } catch {
+        setAvatarError("Không tải được ảnh lên, vui lòng thử lại.");
+        return;
+      }
+    }
+
     const payload = {
       fullName: values.fullName,
       phone: values.phone,
@@ -201,8 +221,14 @@ export function PatientFormDialog({
       dateOfBirth: values.dateOfBirth
         ? dateOnlyToIsoWithOffset(values.dateOfBirth)
         : undefined,
+      avatar: avatarUrl,
     };
-    const mockPatch = { address: address.trim() || "Chưa cập nhật", allergy, tag, avatar };
+    const mockPatch = {
+      address: address.trim() || "Chưa cập nhật",
+      allergy,
+      tag,
+      avatar: avatarUrl,
+    };
     try {
       if (patient) {
         await updatePatient(patient.id, payload);
@@ -215,7 +241,7 @@ export function PatientFormDialog({
           gender: payload.gender ?? null,
           notes: payload.notes ?? null,
           dateOfBirth: payload.dateOfBirth ?? null,
-          avatar,
+          avatar: avatarUrl,
         });
       } else {
         const created = await createPatient(payload);
@@ -281,6 +307,7 @@ export function PatientFormDialog({
                     className="gap-1.5 text-[#a4553a] hover:text-[#a4553a]"
                     onClick={() => {
                       setAvatar(null);
+                      setAvatarFile(null);
                       setAvatarError(null);
                     }}
                   >

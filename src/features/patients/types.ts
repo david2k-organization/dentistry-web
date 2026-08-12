@@ -21,6 +21,8 @@ export type CreatePatientInput = {
   dateOfBirth?: string;
   gender?: Gender;
   notes?: string;
+  // URL ảnh đại diện (public URL trả về từ luồng upload presigned URL).
+  avatar?: string | null;
 };
 
 export type UpdatePatientInput = Partial<CreatePatientInput>;
