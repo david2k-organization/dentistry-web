@@ -1,23 +1,5 @@
-import { toDateKey, type Appt, type ApptStatus } from "./constants";
-import type { Appointment, AppointmentStatus } from "./types";
-
-/** Enum trạng thái của backend → trạng thái hiển thị trên lịch. */
-export const API_TO_UI_STATUS: Record<AppointmentStatus, ApptStatus> = {
-  SCHEDULED: "booked",
-  ARRIVED: "arrived",
-  IN_PROGRESS: "in_progress",
-  COMPLETED: "done",
-  CANCELLED: "cancelled",
-};
-
-/** Trạng thái hiển thị → enum của backend (dùng khi cập nhật). */
-export const UI_TO_API_STATUS: Record<ApptStatus, AppointmentStatus> = {
-  booked: "SCHEDULED",
-  arrived: "ARRIVED",
-  in_progress: "IN_PROGRESS",
-  done: "COMPLETED",
-  cancelled: "CANCELLED",
-};
+import { toDateKey, type Appt } from "./constants";
+import type { Appointment } from "./types";
 
 function toTimeLabel(date: Date): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(
@@ -36,7 +18,9 @@ export function toAppt(a: Appointment): Appt {
     patient: a.patient?.fullName ?? "—",
     service: a.service?.name ?? "—",
     doctor: a.doctor?.fullName ?? "—",
-    status: API_TO_UI_STATUS[a.status],
+    serviceId: a.serviceId,
+    doctorId: a.doctorId,
+    status: a.status,
   };
 }
 

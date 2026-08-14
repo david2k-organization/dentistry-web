@@ -42,7 +42,7 @@ export type CreateTreatmentRecordInput = {
   doctorId: string;
   serviceId: string;
   notes?: string;
-  /** Mảng URL ảnh (hoặc data URL nếu chưa có endpoint upload). */
+  nextAppointmentAt?: Date;
   images?: string[];
   treatmentSupplies?: TreatmentSupplyInput[];
 };

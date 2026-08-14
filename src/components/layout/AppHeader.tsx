@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell, LogOut, Plus, Search, Settings, User } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +16,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { clearTokens } from "@/features/auth/auth-storage";
 import { NotificationPanel } from "@/features/notifications/NotificationPanel";
-import { mockNotifications } from "@/features/notifications/data";
+import {
+  getNotifications,
+  markNotificationRead,
+  markNotificationsRead,
+} from "@/features/notifications/api";
+import { useNotificationSocket } from "@/features/notifications/useNotificationSocket";
+import type { Notification } from "@/features/notifications/types";
 
 const TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p === "/", title: "Tổng quan" },
@@ -47,20 +54,71 @@ export function AppHeader() {
   const navigate = useNavigate();
   const screenTitle = useScreenTitle();
   const [search, setSearch] = useState("");
-  const [notifications, setNotifications] = useState(mockNotifications);
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifLoading, setNotifLoading] = useState(true);
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  useEffect(() => {
+    let active = true;
+    getNotifications({ pageSize: 50 })
+      .then((res) => {
+        if (active) setNotifications(res.data);
+      })
+      .catch(() => {
+        if (active) toast.error("Không tải được thông báo");
+      })
+      .finally(() => {
+        if (active) setNotifLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Realtime: prepend notification mới đẩy qua socket + toast (bỏ qua nếu trùng id).
+  const handleIncoming = useCallback((notification: Notification) => {
+    setNotifications((prev) =>
+      prev.some((n) => n.id === notification.id) ? prev : [notification, ...prev],
+    );
+    toast(notification.title, { description: notification.message });
+  }, []);
+  useNotificationSocket(handleIncoming);
 
   const handleLogout = () => {
     clearTokens();
     navigate({ to: "/login" });
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const handleMarkAllRead = async () => {
+    const unreadIds = notifications.filter((n) => !n.isRead).map((n) => n.id);
+    if (unreadIds.length === 0) return;
+    const now = new Date().toISOString();
+    const prev = notifications;
+    setNotifications((list) =>
+      list.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: now })),
+    );
+    try {
+      await markNotificationsRead(unreadIds);
+    } catch {
+      setNotifications(prev);
+      toast.error("Không đánh dấu đã đọc được");
+    }
   };
 
-  const handleNotificationClick = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  const handleNotificationClick = async (id: string) => {
+    const target = notifications.find((n) => n.id === id);
+    if (!target || target.isRead) return;
+    const now = new Date().toISOString();
+    const prev = notifications;
+    setNotifications((list) =>
+      list.map((n) => (n.id === id ? { ...n, isRead: true, readAt: now } : n)),
+    );
+    try {
+      await markNotificationRead(id, true);
+    } catch {
+      setNotifications(prev);
+      toast.error("Không đánh dấu đã đọc được");
+    }
   };
 
   return (
@@ -105,6 +163,7 @@ export function AppHeader() {
         </PopoverTrigger>
         <NotificationPanel
           notifications={notifications}
+          loading={notifLoading}
           onMarkAllRead={handleMarkAllRead}
           onItemClick={handleNotificationClick}
         />

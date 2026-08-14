@@ -174,11 +174,16 @@ export function TreatmentRecordDialog({
   };
 
   const addLine = () =>
-    setLines((prev) => [...prev, { key: nextKey.current++, suppliesId: "", qty: 1 }]);
+    setLines((prev) => [
+      ...prev,
+      { key: nextKey.current++, suppliesId: "", qty: 1 },
+    ]);
   const removeLine = (key: number) =>
     setLines((prev) => prev.filter((l) => l.key !== key));
   const updateLine = (key: number, patch: Partial<MaterialLine>) =>
-    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+    setLines((prev) =>
+      prev.map((l) => (l.key === key ? { ...l, ...patch } : l)),
+    );
 
   const exportLines = lines.filter((l) => l.suppliesId && l.qty > 0);
   const insufficient = exportLines.some((l) => {
@@ -199,7 +204,12 @@ export function TreatmentRecordDialog({
 
     const treatmentSupplies: TreatmentSupplyInput[] = exportLines.map((l) => {
       const s = supplyOf(l.suppliesId)!;
-      return { suppliesId: l.suppliesId, quantity: l.qty, unit: s.unit, note: s.name };
+      return {
+        suppliesId: l.suppliesId,
+        quantity: l.qty,
+        unit: s.unit,
+        note: s.name,
+      };
     });
 
     try {
@@ -208,8 +218,11 @@ export function TreatmentRecordDialog({
         doctorId: values.doctorId,
         serviceId: values.serviceId,
         notes: notes || undefined,
+        nextAppointmentAt: values.followUp,
         images: values.images.length ? values.images : undefined,
-        treatmentSupplies: treatmentSupplies.length ? treatmentSupplies : undefined,
+        treatmentSupplies: treatmentSupplies.length
+          ? treatmentSupplies
+          : undefined,
       });
 
       const materialsCount = exportLines.reduce((sum, l) => sum + l.qty, 0);
@@ -260,7 +273,10 @@ export function TreatmentRecordDialog({
             </Labeled>
 
             <Labeled label="Bác sĩ thực hiện">
-              <Select value={doctorId} onValueChange={(v) => form.setValue("doctorId", v)}>
+              <Select
+                value={doctorId}
+                onValueChange={(v) => form.setValue("doctorId", v)}
+              >
                 <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="Chọn bác sĩ" />
                 </SelectTrigger>
@@ -371,7 +387,9 @@ export function TreatmentRecordDialog({
                     <div className="flex items-center gap-2.5">
                       <Select
                         value={line.suppliesId || undefined}
-                        onValueChange={(v) => updateLine(line.key, { suppliesId: v })}
+                        onValueChange={(v) =>
+                          updateLine(line.key, { suppliesId: v })
+                        }
                       >
                         <SelectTrigger className="h-9 min-w-0 flex-1">
                           <SelectValue placeholder="Chọn vật tư trong kho" />
@@ -384,7 +402,8 @@ export function TreatmentRecordDialog({
                           )}
                           {supplies.map((s) => (
                             <SelectItem key={s.id} value={s.id}>
-                              {s.name} (còn {s.quantity} {SUPPLY_UNIT_LABELS[s.unit]})
+                              {s.name} (còn {s.quantity}{" "}
+                              {SUPPLY_UNIT_LABELS[s.unit]})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -395,7 +414,10 @@ export function TreatmentRecordDialog({
                         value={line.qty}
                         onChange={(e) =>
                           updateLine(line.key, {
-                            qty: Math.max(0, Number(e.target.value.replace(/\D/g, "")) || 0),
+                            qty: Math.max(
+                              0,
+                              Number(e.target.value.replace(/\D/g, "")) || 0,
+                            ),
                           })
                         }
                         className="h-9 w-[68px] text-center tabular-nums"
@@ -439,7 +461,9 @@ export function TreatmentRecordDialog({
               form="treatment-record-form"
               disabled={insufficient || form.formState.isSubmitting}
             >
-              {form.formState.isSubmitting ? "Đang lưu..." : "Lưu hồ sơ & xuất vật tư"}
+              {form.formState.isSubmitting
+                ? "Đang lưu..."
+                : "Lưu hồ sơ & xuất vật tư"}
             </Button>
           </div>
         </DialogFooter>

@@ -1,56 +1,57 @@
 export type ApptStatus =
-  | "booked"
-  | "arrived"
-  | "in_progress"
-  | "done"
-  | "cancelled";
+  | "SCHEDULED"
+  | "ARRIVED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 export const STATUS: Record<
   ApptStatus,
   { label: string; bg: string; fg: string; fgSoft: string; dot: string }
 > = {
-  booked: {
+  SCHEDULED: {
     label: "Đã hẹn",
     bg: "#eef4f4",
     fg: "#5c7a78",
     fgSoft: "#7e9997",
     dot: "#b8cbc9",
   },
-  arrived: {
+  ARRIVED: {
     label: "Đã đến",
-    bg: "#e7f1f0",
-    fg: "#0f7a73",
-    fgSoft: "#4a8f89",
-    dot: "#0f7a73",
+    bg: "#fdf0e6",
+    fg: "#b5611f",
+    fgSoft: "#cc8a55",
+    dot: "#e0803c",
   },
-  in_progress: {
+  IN_PROGRESS: {
     label: "Đang khám",
-    bg: "#fdf3e8",
-    fg: "#9a6524",
-    fgSoft: "#b98a4a",
-    dot: "#d99a3f",
+    bg: "#eaf1fb",
+    fg: "#2c5aa0",
+    fgSoft: "#5f82bd",
+    dot: "#3b7dd8",
   },
-  done: {
+  COMPLETED: {
     label: "Hoàn tất",
     bg: "#eef6f1",
     fg: "#3f7a55",
     fgSoft: "#6b9a7d",
     dot: "#5da177",
   },
-  cancelled: {
+  CANCELLED: {
     label: "Huỷ hẹn",
-    bg: "#fbeeea",
-    fg: "#a4553a",
-    fgSoft: "#c2765b",
-    dot: "#c2765b",
+    bg: "#fdeaea",
+    fg: "#c0392b",
+    fgSoft: "#d9736a",
+    dot: "#dc3545",
   },
 };
 
 export const LEGEND: ApptStatus[] = [
-  "booked",
-  "arrived",
-  "in_progress",
-  "done",
+  "SCHEDULED",
+  "ARRIVED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
 ];
 
 // Khung giờ làm việc & kích thước lưới
@@ -138,12 +139,14 @@ export function formatWeekRange(weekStart: Date): string {
 
 export type Appt = {
   id: string;
-  date: string; // khoá ngày `yyyy-mm-dd`
-  start: string; // "HH:MM"
-  duration: number; // phút
+  date: string;
+  start: string;
+  duration: number;
   patient: string;
   service: string;
   doctor: string;
+  serviceId: string;
+  doctorId: string;
   status: ApptStatus;
 };
 

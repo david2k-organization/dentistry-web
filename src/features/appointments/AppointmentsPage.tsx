@@ -18,7 +18,14 @@ import type { Service } from "@/features/services/types";
 import { getUsers } from "@/features/users/api";
 import type { User } from "@/features/users/types";
 import { createAppointment, getAppointments, updateAppointment } from "./api";
-import { AppointmentDetailDialog } from "./AppointmentDetailDialog";
+import {
+  AppointmentDetailDialog,
+  type AppointmentAction,
+} from "./AppointmentDetailDialog";
+import {
+  EditAppointmentDialog,
+  type EditAppointmentInput,
+} from "./EditAppointmentDialog";
 import {
   LEGEND,
   OPEN_HOUR,
@@ -31,8 +38,9 @@ import {
   parseDateKey,
   startOfWeek,
   type Appt,
+  type ApptStatus,
 } from "./constants";
-import { toAppt, toAppointmentAt, UI_TO_API_STATUS } from "./map";
+import { toAppt, toAppointmentAt } from "./map";
 import {
   NewAppointmentDialog,
   type NewAppointmentInput,
@@ -48,9 +56,44 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Bước tiến tiếp theo trong vòng đời lịch hẹn (null nếu đã kết thúc). */
+const NEXT_STEP: Record<ApptStatus, ApptStatus | null> = {
+  SCHEDULED: "ARRIVED",
+  ARRIVED: "IN_PROGRESS",
+  IN_PROGRESS: "COMPLETED",
+  COMPLETED: null,
+  CANCELLED: null,
+};
+
+/** Nhãn nút cho hành động chuyển sang trạng thái tương ứng. */
+const STATUS_ACTION_LABEL: Record<ApptStatus, string> = {
+  SCHEDULED: "Đặt lại lịch",
+  ARRIVED: "Check-in bệnh nhân",
+  IN_PROGRESS: "Bắt đầu khám",
+  COMPLETED: "Hoàn tất",
+  CANCELLED: "Huỷ hẹn",
+};
+
+const STATUS_CHANGE_MESSAGE: Record<ApptStatus, (patient: string) => string> = {
+  SCHEDULED: (p) => `Đã đặt lại lịch cho ${p}`,
+  ARRIVED: (p) => `${p} đã check-in`,
+  IN_PROGRESS: (p) => `Bắt đầu khám cho ${p}`,
+  COMPLETED: (p) => `Đã hoàn tất lịch hẹn của ${p}`,
+  CANCELLED: (p) => `Đã huỷ lịch hẹn của ${p}`,
+};
+
+const STATUS_CHANGE_ERROR: Record<ApptStatus, string> = {
+  SCHEDULED: "Không thể đặt lại lịch.",
+  ARRIVED: "Không thể check-in bệnh nhân.",
+  IN_PROGRESS: "Không thể bắt đầu khám.",
+  COMPLETED: "Không thể hoàn tất lịch hẹn.",
+  CANCELLED: "Không thể huỷ lịch hẹn.",
+};
+
 export function AppointmentsPage() {
   const [appts, setAppts] = useState<Appt[]>([]);
   const [selected, setSelected] = useState<Appt | null>(null);
+  const [editing, setEditing] = useState<Appt | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
@@ -79,6 +122,7 @@ export function AppointmentsPage() {
       getAppointments({ pageSize: 200 }),
     ])
       .then(([patientPage, servicePage, doctorPage, appointmentPage]) => {
+        console.log("appointmentPage.data", appointmentPage.data);
         setPatients(patientPage.data);
         setServices(servicePage.data);
         setDoctors(doctorPage.data);
@@ -104,39 +148,69 @@ export function AppointmentsPage() {
     }
   }, [newAppt, navigate]);
 
-  const handleCheckIn = async () => {
+  const handleUpdateStatus = async (next: ApptStatus) => {
     if (!selected) return;
     const target = selected;
+    setSaving(true);
     try {
       const updated = await updateAppointment(target.id, {
-        status: UI_TO_API_STATUS.arrived,
+        status: next,
       });
       setAppts((prev) =>
         prev.map((a) => (a.id === target.id ? toAppt(updated) : a)),
       );
-      toast.success(`${target.patient} đã check-in`);
+      const message = STATUS_CHANGE_MESSAGE[next](target.patient);
+      if (next === "CANCELLED") toast(message);
+      else toast.success(message);
       setSelected(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err, "Không thể check-in bệnh nhân."));
+      toast.error(apiErrorMessage(err, STATUS_CHANGE_ERROR[next]));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleCancel = async () => {
-    if (!selected) return;
-    const target = selected;
+  const handleUpdateAppt = async (input: EditAppointmentInput) => {
+    if (!editing) return;
+    const target = editing;
+    setSaving(true);
     try {
       const updated = await updateAppointment(target.id, {
-        status: UI_TO_API_STATUS.cancelled,
+        serviceId: input.serviceId,
+        doctorId: input.doctorId,
+        duration: input.duration,
       });
       setAppts((prev) =>
         prev.map((a) => (a.id === target.id ? toAppt(updated) : a)),
       );
-      toast(`Đã huỷ lịch hẹn của ${target.patient}`);
-      setSelected(null);
+      toast.success(`Đã cập nhật cuộc hẹn của ${target.patient}`);
+      setEditing(null);
     } catch (err) {
-      toast.error(apiErrorMessage(err, "Không thể huỷ lịch hẹn."));
+      toast.error(apiErrorMessage(err, "Không thể cập nhật cuộc hẹn."));
+    } finally {
+      setSaving(false);
     }
   };
+
+  // Hành động khả dụng theo trạng thái hiện tại (vòng đời: Đã hẹn → Đã đến →
+  // Đang khám → Hoàn tất; có thể Huỷ hẹn ở mọi bước chưa kết thúc).
+  const statusActions: AppointmentAction[] = [];
+  if (selected) {
+    const nextStep = NEXT_STEP[selected.status];
+    if (nextStep) {
+      statusActions.push({
+        label: STATUS_ACTION_LABEL[nextStep],
+        onClick: () => handleUpdateStatus(nextStep),
+      });
+    }
+    if (selected.status !== "COMPLETED" && selected.status !== "CANCELLED") {
+      statusActions.push({
+        label: "Huỷ hẹn",
+        danger: true,
+        onClick: () => handleUpdateStatus("CANCELLED"),
+      });
+    }
+  }
 
   const handleCellClick = (dayIndex: number, slotIndex: number) => {
     const start = addMinutes(
@@ -249,7 +323,7 @@ export function AppointmentsPage() {
             {LEGEND.map((s) => (
               <div key={s} className="flex items-center gap-1.5">
                 <span
-                  className="px-4.5 rounded-[3px]"
+                  className="inline-block size-3 shrink-0 rounded-[3px]"
                   style={{ background: STATUS[s].dot }}
                 />
                 {STATUS[s].label}
@@ -275,7 +349,7 @@ export function AppointmentsPage() {
               ? `${formatDayMonth(parseDateKey(selected.date))} · ${selected.start}–${addMinutes(selected.start, selected.duration)}`
               : ""
           }
-          status={selected ? STATUS[selected.status] : STATUS.booked}
+          status={selected ? STATUS[selected.status] : STATUS.SCHEDULED}
           fields={
             selected
               ? [
@@ -285,10 +359,30 @@ export function AppointmentsPage() {
                 ]
               : []
           }
-          onCheckIn={handleCheckIn}
-          onCancel={handleCancel}
+          actions={statusActions}
+          onEdit={
+            selected &&
+            selected.status !== "COMPLETED" &&
+            selected.status !== "CANCELLED"
+              ? () => {
+                  setEditing(selected);
+                  setSelected(null);
+                }
+              : undefined
+          }
+          saving={saving}
         />
       </div>
+
+      <EditAppointmentDialog
+        open={editing != null}
+        onOpenChange={(open) => !open && setEditing(null)}
+        appointment={editing}
+        services={services}
+        doctors={doctors}
+        onSave={handleUpdateAppt}
+        saving={saving}
+      />
 
       <NewAppointmentDialog
         open={newOpen}

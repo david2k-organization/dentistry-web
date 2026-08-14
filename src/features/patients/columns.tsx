@@ -6,6 +6,7 @@ import { iconActionButtonClass } from "@/lib/utils";
 import {
   calculateAge,
   formatCurrency,
+  formatDate,
   genderLabels,
   getInitials,
 } from "./format";
@@ -75,18 +76,27 @@ export function createPatientColumns(
         );
       },
     }),
-    columnHelper.display({
-      id: "lastVisit",
-      header: "Lần khám gần nhất",
+    columnHelper.accessor("notes", {
+      header: "Ghi chú",
       cell: (info) => {
-        const mock = getPatientMock(info.row.original.id);
-        const latest = mock.history[0];
+        const notes = info.getValue();
         return (
-          <span className="min-w-0 truncate text-[#4a6664]">
-            {latest ? `${latest.date} — ${latest.name}` : "Chưa khám lần nào"}
+          <span
+            className="block max-w-[220px] truncate text-[#4a6664]"
+            title={notes ?? undefined}
+          >
+            {notes?.trim() ? notes : "—"}
           </span>
         );
       },
+    }),
+    columnHelper.accessor("createdAt", {
+      header: "Ngày tạo",
+      cell: (info) => (
+        <span className="tabular-nums text-[#4a6664]">
+          {formatDate(info.getValue())}
+        </span>
+      ),
     }),
     columnHelper.display({
       id: "debt",
