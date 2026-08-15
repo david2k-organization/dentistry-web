@@ -85,16 +85,24 @@ export function SearchableSelect<T>({
     return options.filter((o) => normalize(getOptionLabel(o)).includes(q));
   }, [remote, options, query, getOptionLabel]);
 
+  // Giữ callback mới nhất trong ref để effect debounce KHÔNG phụ thuộc vào identity
+  // của `onSearchChange`. Nếu để nó trong deps, caller truyền hàm inline (đổi mỗi
+  // render) sẽ khiến effect chạy lại → gọi search → setState → re-render → lặp vô hạn.
+  const onSearchChangeRef = useRef(onSearchChange);
+  useEffect(() => {
+    onSearchChangeRef.current = onSearchChange;
+  });
+
   const didMount = useRef(false);
   useEffect(() => {
-    if (!onSearchChange) return;
+    if (!onSearchChangeRef.current) return;
     if (!didMount.current) {
       didMount.current = true;
       return;
     }
-    const timer = setTimeout(() => onSearchChange(query), debounceMs);
+    const timer = setTimeout(() => onSearchChangeRef.current?.(query), debounceMs);
     return () => clearTimeout(timer);
-  }, [query, onSearchChange, debounceMs]);
+  }, [query, debounceMs]);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);

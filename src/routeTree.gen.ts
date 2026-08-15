@@ -14,7 +14,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as authRegisterRouteImport } from './routes/(auth)/register'
 import { Route as authLoginRouteImport } from './routes/(auth)/login'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
-import { Route as AuthenticatedTreatmentsIndexRouteImport } from './routes/_authenticated/treatments/index'
+import { Route as AuthenticatedToothChartIndexRouteImport } from './routes/_authenticated/tooth-chart/index'
 import { Route as AuthenticatedStaffIndexRouteImport } from './routes/_authenticated/staff/index'
 import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authenticated/services/index'
 import { Route as AuthenticatedServiceCategoriesIndexRouteImport } from './routes/_authenticated/service-categories/index'
@@ -50,10 +50,10 @@ const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedTreatmentsIndexRoute =
-  AuthenticatedTreatmentsIndexRouteImport.update({
-    id: '/treatments/',
-    path: '/treatments/',
+const AuthenticatedToothChartIndexRoute =
+  AuthenticatedToothChartIndexRouteImport.update({
+    id: '/tooth-chart/',
+    path: '/tooth-chart/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedStaffIndexRoute = AuthenticatedStaffIndexRouteImport.update({
@@ -130,7 +130,7 @@ export interface FileRoutesByFullPath {
   '/service-categories/': typeof AuthenticatedServiceCategoriesIndexRoute
   '/services/': typeof AuthenticatedServicesIndexRoute
   '/staff/': typeof AuthenticatedStaffIndexRoute
-  '/treatments/': typeof AuthenticatedTreatmentsIndexRoute
+  '/tooth-chart/': typeof AuthenticatedToothChartIndexRoute
 }
 export interface FileRoutesByTo {
   '/forgot-password': typeof authForgotPasswordRoute
@@ -147,7 +147,7 @@ export interface FileRoutesByTo {
   '/service-categories': typeof AuthenticatedServiceCategoriesIndexRoute
   '/services': typeof AuthenticatedServicesIndexRoute
   '/staff': typeof AuthenticatedStaffIndexRoute
-  '/treatments': typeof AuthenticatedTreatmentsIndexRoute
+  '/tooth-chart': typeof AuthenticatedToothChartIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -166,7 +166,7 @@ export interface FileRoutesById {
   '/_authenticated/service-categories/': typeof AuthenticatedServiceCategoriesIndexRoute
   '/_authenticated/services/': typeof AuthenticatedServicesIndexRoute
   '/_authenticated/staff/': typeof AuthenticatedStaffIndexRoute
-  '/_authenticated/treatments/': typeof AuthenticatedTreatmentsIndexRoute
+  '/_authenticated/tooth-chart/': typeof AuthenticatedToothChartIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -185,7 +185,7 @@ export interface FileRouteTypes {
     | '/service-categories/'
     | '/services/'
     | '/staff/'
-    | '/treatments/'
+    | '/tooth-chart/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forgot-password'
@@ -202,7 +202,7 @@ export interface FileRouteTypes {
     | '/service-categories'
     | '/services'
     | '/staff'
-    | '/treatments'
+    | '/tooth-chart'
   id:
     | '__root__'
     | '/_authenticated'
@@ -220,7 +220,7 @@ export interface FileRouteTypes {
     | '/_authenticated/service-categories/'
     | '/_authenticated/services/'
     | '/_authenticated/staff/'
-    | '/_authenticated/treatments/'
+    | '/_authenticated/tooth-chart/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -267,11 +267,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/treatments/': {
-      id: '/_authenticated/treatments/'
-      path: '/treatments'
-      fullPath: '/treatments/'
-      preLoaderRoute: typeof AuthenticatedTreatmentsIndexRouteImport
+    '/_authenticated/tooth-chart/': {
+      id: '/_authenticated/tooth-chart/'
+      path: '/tooth-chart'
+      fullPath: '/tooth-chart/'
+      preLoaderRoute: typeof AuthenticatedToothChartIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/staff/': {
@@ -359,7 +359,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedServiceCategoriesIndexRoute: typeof AuthenticatedServiceCategoriesIndexRoute
   AuthenticatedServicesIndexRoute: typeof AuthenticatedServicesIndexRoute
   AuthenticatedStaffIndexRoute: typeof AuthenticatedStaffIndexRoute
-  AuthenticatedTreatmentsIndexRoute: typeof AuthenticatedTreatmentsIndexRoute
+  AuthenticatedToothChartIndexRoute: typeof AuthenticatedToothChartIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -375,7 +375,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedServiceCategoriesIndexRoute,
   AuthenticatedServicesIndexRoute: AuthenticatedServicesIndexRoute,
   AuthenticatedStaffIndexRoute: AuthenticatedStaffIndexRoute,
-  AuthenticatedTreatmentsIndexRoute: AuthenticatedTreatmentsIndexRoute,
+  AuthenticatedToothChartIndexRoute: AuthenticatedToothChartIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

@@ -1,18 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AxiosError } from "axios";
+import { format } from "date-fns";
+import { toast } from "sonner";
 
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { getPatients } from "@/features/patients/api";
 import type { Patient } from "@/features/patients/types";
 import type { ToothState } from "@/features/services/types";
 import {
-  getPatientChart,
+  createOdontogram,
+  getOdontogram,
+  getToothHistory,
   LOWER_LEFT,
   LOWER_RIGHT,
-  setToothState as persistToothState,
   UPPER_LEFT,
   UPPER_RIGHT,
-  type PatientChart,
-} from "./tooth-chart-mock";
+  updateTooth,
+} from "./api";
+import type { PatientTooth, ToothStateHistory } from "./types";
 
 const TOOTH_STATE: Record<
   ToothState,
@@ -86,15 +91,21 @@ function ToothButton({
   );
 }
 
-export function TreatmentPage() {
+export function ToothChartPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientLoading, setPatientLoading] = useState(false);
   const patientSeq = useRef(0);
 
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [selectedPatientName, setSelectedPatientName] = useState("");
-  const [chart, setChart] = useState<PatientChart | null>(null);
+  const [teeth, setTeeth] = useState<PatientTooth[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
+  const [history, setHistory] = useState<ToothStateHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [savingTooth, setSavingTooth] = useState(false);
+  const chartSeq = useRef(0);
+  const historySeq = useRef(0);
 
   // Nạp sẵn một trang bệnh nhân để có gợi ý trước khi gõ tìm kiếm.
   useEffect(() => {
@@ -119,19 +130,92 @@ export function TreatmentPage() {
       });
   };
 
-  const handleSelectPatient = (id: string) => {
-    setSelectedPatientId(id);
-    setSelectedPatientName(patients.find((p) => p.id === id)?.fullName ?? "");
-    setChart(getPatientChart(id));
-    setSelectedTooth(null);
+  // Tra răng theo số hiệu FDI để lấy `id` (dùng khi gọi PUT) và trạng thái hiện tại.
+  const toothByNumber = useMemo(() => {
+    const map = new Map<number, PatientTooth>();
+    for (const t of teeth) map.set(t.toothNumber, t);
+    return map;
+  }, [teeth]);
+
+  const stateOf = (num: number): ToothState => toothByNumber.get(num)?.state ?? "NORMAL";
+
+  // Nạp lịch sử thay đổi của một chiếc răng; bỏ qua phản hồi cũ khi đổi răng nhanh.
+  const loadHistory = (patientId: string, toothNumber: number) => {
+    const seq = ++historySeq.current;
+    setHistoryLoading(true);
+    getToothHistory(patientId, toothNumber)
+      .then((res) => {
+        if (seq === historySeq.current) setHistory(res.data);
+      })
+      .catch(() => {
+        if (seq === historySeq.current) setHistory([]);
+      })
+      .finally(() => {
+        if (seq === historySeq.current) setHistoryLoading(false);
+      });
   };
 
-  const stateOf = (num: number): ToothState => chart?.states[num] ?? "NORMAL";
-  const toothHistory = selectedTooth != null ? (chart?.history[selectedTooth] ?? []) : [];
+  const handleSelectPatient = async (id: string) => {
+    setSelectedPatientId(id);
+    setSelectedPatientName(patients.find((p) => p.id === id)?.fullName ?? "");
+    setSelectedTooth(null);
+    setHistory([]);
+    setTeeth([]);
 
-  const handleSetToothState = (num: number, state: ToothState) => {
-    if (!selectedPatientId) return;
-    setChart(persistToothState(selectedPatientId, num, state));
+    const seq = ++chartSeq.current;
+    setChartLoading(true);
+    try {
+      let data = await getOdontogram(id);
+      // Bệnh nhân chưa có sơ đồ răng → khởi tạo bộ 32 răng mặc định rồi nạp lại.
+      if (data.length === 0) {
+        try {
+          await createOdontogram(id);
+          data = await getOdontogram(id);
+        } catch {
+          /* giữ mảng rỗng, hiển thị trạng thái trống */
+        }
+      }
+      if (seq === chartSeq.current) setTeeth(data);
+    } catch (err) {
+      if (seq === chartSeq.current) {
+        setTeeth([]);
+        toast.error(
+          err instanceof AxiosError
+            ? (err.response?.data?.message ?? "Không thể tải sơ đồ răng.")
+            : "Không thể tải sơ đồ răng.",
+        );
+      }
+    } finally {
+      if (seq === chartSeq.current) setChartLoading(false);
+    }
+  };
+
+  const handleSelectTooth = (num: number) => {
+    setSelectedTooth(num);
+    if (selectedPatientId) loadHistory(selectedPatientId, num);
+  };
+
+  const handleSetToothState = async (num: number, state: ToothState) => {
+    const tooth = toothByNumber.get(num);
+    if (!selectedPatientId || !tooth || savingTooth) return;
+    if (tooth.state === state) return;
+
+    setSavingTooth(true);
+    try {
+      const updated = await updateTooth(tooth.id, { state });
+      setTeeth((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      // Nạp lại lịch sử để lấy mốc mới (kèm người thực hiện) từ backend.
+      loadHistory(selectedPatientId, num);
+      toast.success(`Đã cập nhật trạng thái răng ${num}.`);
+    } catch (err) {
+      toast.error(
+        err instanceof AxiosError
+          ? (err.response?.data?.message ?? "Không thể cập nhật trạng thái răng.")
+          : "Không thể cập nhật trạng thái răng.",
+      );
+    } finally {
+      setSavingTooth(false);
+    }
   };
 
   const renderRow = (nums: number[], lower: boolean) =>
@@ -142,14 +226,14 @@ export function TreatmentPage() {
         lower={lower}
         state={stateOf(num)}
         selected={selectedTooth === num}
-        onClick={() => setSelectedTooth(num)}
+        onClick={() => handleSelectTooth(num)}
       />
     ));
 
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.4fr_1fr]">
       {/* Sơ đồ răng */}
-      <div className="rounded-[14px] border border-border bg-card p-[18px]">
+      <div className="rounded-[14px] border border-border bg-card p-4.5">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2.5">
           <div className="shrink-0 text-[14.5px] font-semibold text-foreground">
             Sơ đồ răng
@@ -166,14 +250,14 @@ export function TreatmentPage() {
             onSearchChange={handlePatientSearch}
             loading={patientLoading}
             selectedLabel={selectedPatientName || undefined}
-            className="w-[220px]"
+            className="w-55"
           />
           <div className="flex-1" />
           <div className="flex flex-wrap gap-3 text-[11.5px] text-muted-foreground">
             {STATE_ORDER.map((st) => (
               <div key={st} className="flex items-center gap-1.5">
                 <span
-                  className="size-[9px] rounded-[3px]"
+                  className="size-2.25 rounded-[3px]"
                   style={{
                     background: TOOTH_STATE[st].bg,
                     border: `1px solid ${TOOTH_STATE[st].border}`,
@@ -185,7 +269,7 @@ export function TreatmentPage() {
           </div>
         </div>
 
-        {!selectedPatientId || !chart ? (
+        {!selectedPatientId ? (
           <div className="mt-5 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[#dfeceb] bg-[#f7fbfa] px-4 py-16 text-center">
             <div className="text-[13px] font-medium text-foreground">
               Chưa chọn bệnh nhân
@@ -194,9 +278,17 @@ export function TreatmentPage() {
               Chọn một bệnh nhân ở trên để xem sơ đồ răng.
             </div>
           </div>
+        ) : chartLoading ? (
+          <div className="mt-5 rounded-xl border border-dashed border-[#dfeceb] bg-[#f7fbfa] px-4 py-16 text-center text-[12.5px] text-muted-foreground">
+            Đang tải sơ đồ răng…
+          </div>
+        ) : teeth.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-dashed border-[#dfeceb] bg-[#f7fbfa] px-4 py-16 text-center text-[12.5px] text-muted-foreground">
+            Chưa có dữ liệu sơ đồ răng cho bệnh nhân này.
+          </div>
         ) : (
           <>
-            <div className="mt-5 flex flex-col gap-2.5 rounded-xl border border-[#eaf3f2] bg-[#f7fbfa] px-1.5 py-[18px]">
+            <div className="mt-5 flex flex-col gap-2.5 rounded-xl border border-[#eaf3f2] bg-[#f7fbfa] px-1.5 py-4.5">
               <div className="text-center text-[11px] tracking-[0.08em] text-[#9fb3b1]">HÀM TRÊN</div>
               <div className="flex justify-center gap-4">
                 <div className="flex gap-1">{renderRow(UPPER_RIGHT, false)}</div>
@@ -211,7 +303,7 @@ export function TreatmentPage() {
             </div>
 
             {/* Panel răng đang chọn */}
-            <div className="mt-[18px] border-t border-[#f0f5f4] pt-4">
+            <div className="mt-4.5 border-t border-[#f0f5f4] pt-4">
               {selectedTooth == null ? (
                 <div className="text-[12.5px] text-muted-foreground">
                   Chọn một răng trên sơ đồ để ghi nhận hiện trạng.
@@ -231,8 +323,9 @@ export function TreatmentPage() {
                         <button
                           key={st}
                           type="button"
+                          disabled={savingTooth}
                           onClick={() => handleSetToothState(selectedTooth, st)}
-                          className="cursor-pointer rounded-[9px] border px-[13px] py-[7px] text-[12.5px] font-medium transition-[filter] hover:brightness-95"
+                          className="cursor-pointer rounded-[9px] border px-3.25 py-1.75 text-[12.5px] font-medium transition-[filter] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                           style={{
                             background: active ? TOOTH_STATE[st].bg : "#ffffff",
                             color: active ? TOOTH_STATE[st].fg : "#4a6664",
@@ -253,7 +346,7 @@ export function TreatmentPage() {
 
       {/* Lịch sử thay đổi */}
       <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-        <div className="border-b border-[#e6efee] px-[18px] py-[15px]">
+        <div className="border-b border-[#e6efee] px-4.5 py-3.75">
           <div className="text-[14.5px] font-semibold text-foreground">Lịch sử thay đổi</div>
           {selectedPatientId && selectedTooth != null && (
             <div className="mt-0.5 text-[12px] text-muted-foreground">
@@ -262,7 +355,7 @@ export function TreatmentPage() {
           )}
         </div>
 
-        <div className="px-[18px] py-3.5">
+        <div className="px-4.5 py-3.5">
           {!selectedPatientId ? (
             <div className="py-8 text-center text-[12.5px] text-muted-foreground">
               Chọn bệnh nhân để xem lịch sử thay đổi.
@@ -271,22 +364,31 @@ export function TreatmentPage() {
             <div className="py-8 text-center text-[12.5px] text-muted-foreground">
               Chọn một răng trên sơ đồ để xem lịch sử thay đổi.
             </div>
-          ) : toothHistory.length === 0 ? (
+          ) : historyLoading ? (
+            <div className="py-8 text-center text-[12.5px] text-muted-foreground">
+              Đang tải lịch sử…
+            </div>
+          ) : history.length === 0 ? (
             <div className="py-8 text-center text-[12.5px] text-muted-foreground">
               Chưa có lịch sử thay đổi cho răng này.
             </div>
           ) : (
             <div className="flex flex-col gap-2.5">
-              {[...toothHistory].reverse().map((entry, idx) => (
-                <div key={idx} className="flex items-center gap-2.5 text-[12.5px]">
+              {history.map((entry) => (
+                <div key={entry.id} className="flex items-center gap-2.5 text-[12.5px]">
                   <span
-                    className="size-[7px] shrink-0 rounded-full"
+                    className="size-1.75 shrink-0 rounded-full"
                     style={{ background: TOOTH_STATE[entry.state].fg }}
                   />
                   <span className="font-medium text-foreground">
                     {TOOTH_STATE[entry.state].label}
                   </span>
-                  <span className="text-muted-foreground">· {entry.date}</span>
+                  <span className="text-muted-foreground">
+                    · {format(new Date(entry.createdAt), "dd/MM/yyyy HH:mm")}
+                  </span>
+                  {entry.changedBy && (
+                    <span className="text-muted-foreground">· {entry.changedBy.fullName}</span>
+                  )}
                 </div>
               ))}
             </div>

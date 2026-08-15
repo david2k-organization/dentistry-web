@@ -28,7 +28,7 @@ const TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p === "/", title: "Tổng quan" },
   { match: (p) => p.startsWith("/appointments"), title: "Lịch hẹn" },
   { match: (p) => p.startsWith("/patients"), title: "Bệnh nhân" },
-  { match: (p) => p.startsWith("/treatments"), title: "Điều trị" },
+  { match: (p) => p.startsWith("/tooth-chart"), title: "Sơ đồ răng" },
   { match: (p) => p.startsWith("/service-categories"), title: "Danh mục dịch vụ" },
   { match: (p) => p.startsWith("/services"), title: "Dịch vụ" },
   { match: (p) => p.startsWith("/invoices"), title: "Hóa đơn" },

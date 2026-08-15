@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
   { label: "Tổng quan", to: "/", icon: LayoutDashboard },
   { label: "Lịch hẹn", to: "/appointments", icon: CalendarDays },
   { label: "Bệnh nhân", to: "/patients", icon: Users },
-  { label: "Điều trị", to: "/treatments", icon: Stethoscope },
+  { label: "Sơ đồ răng", to: "/tooth-chart", icon: Stethoscope },
   { label: "Danh mục dịch vụ", to: "/service-categories", icon: Tags },
   { label: "Dịch vụ", to: "/services", icon: Syringe },
   { label: "Hóa đơn", to: "/invoices", icon: Receipt },

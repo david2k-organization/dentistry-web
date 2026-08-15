@@ -17,7 +17,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { uploadImageViaPresign } from "@/features/media/api";
 import { createPatient, updatePatient } from "./api";
 import {
@@ -28,7 +32,12 @@ import {
   getInitials,
   isoToDateInputValue,
 } from "./format";
-import { getPatientMock, setPatientMock, TAG_OPTIONS, type PatientTag } from "./mock";
+import {
+  getPatientMock,
+  setPatientMock,
+  TAG_OPTIONS,
+  type PatientTag,
+} from "./mock";
 import type { Gender, Patient } from "./types";
 
 const emptyToUndefined = (value: string | undefined) =>
@@ -125,7 +134,7 @@ const boxInputClass =
   "flex-1 min-w-0 border-0 bg-transparent py-2.5 font-sans text-[13px] text-foreground outline-none placeholder:text-muted-foreground";
 
 // Giới hạn kích thước ảnh đại diện (lưu dưới dạng data URL trong bộ nhớ).
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 export function PatientFormDialog({
   open,
@@ -169,7 +178,9 @@ export function PatientFormDialog({
     onOpenChange(nextOpen);
   };
 
-  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     // Cho phép chọn lại cùng một file sau khi xoá.
     event.target.value = "";
@@ -179,7 +190,7 @@ export function PatientFormDialog({
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      setAvatarError("Ảnh tối đa 2MB.");
+      setAvatarError("Ảnh tối đa 5MB.");
       return;
     }
     try {
@@ -221,7 +232,7 @@ export function PatientFormDialog({
       dateOfBirth: values.dateOfBirth
         ? dateOnlyToIsoWithOffset(values.dateOfBirth)
         : undefined,
-      avatar: avatarUrl,
+      avatar: avatarUrl || "",
     };
     const mockPatch = {
       address: address.trim() || "Chưa cập nhật",
@@ -250,7 +261,9 @@ export function PatientFormDialog({
       }
       handleOpenChange(false);
     } catch (error) {
-      const fallback = isEditing ? "Không thể cập nhật bệnh nhân." : "Không thể tạo bệnh nhân.";
+      const fallback = isEditing
+        ? "Không thể cập nhật bệnh nhân."
+        : "Không thể tạo bệnh nhân.";
       if (error instanceof AxiosError) {
         setSubmitError(error.response?.data?.message ?? fallback);
       } else {
@@ -263,7 +276,9 @@ export function PatientFormDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Sửa hồ sơ bệnh nhân" : "Thêm bệnh nhân mới"}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Sửa hồ sơ bệnh nhân" : "Thêm bệnh nhân mới"}
+          </DialogTitle>
           <DialogDescription>
             {isEditing
               ? "Cập nhật thông tin bệnh nhân."
@@ -287,7 +302,9 @@ export function PatientFormDialog({
               )}
             </div>
             <div className="min-w-0">
-              <div className="text-[11.5px] text-muted-foreground">Ảnh đại diện</div>
+              <div className="text-[11.5px] text-muted-foreground">
+                Ảnh đại diện
+              </div>
               <div className="mt-1.5 flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -317,7 +334,9 @@ export function PatientFormDialog({
                 )}
               </div>
               {avatarError ? (
-                <div className="mt-1 text-[11px] text-[#a4553a]">{avatarError}</div>
+                <div className="mt-1 text-[11px] text-[#a4553a]">
+                  {avatarError}
+                </div>
               ) : (
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   JPG, PNG — tối đa 2MB
@@ -388,10 +407,16 @@ export function PatientFormDialog({
                     <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
                     {dateOfBirth ? (
                       <span className="text-foreground">
-                        {format(dateOnlyStringToDate(dateOfBirth), "dd/MM/yyyy", { locale: vi })}
+                        {format(
+                          dateOnlyStringToDate(dateOfBirth),
+                          "dd/MM/yyyy",
+                          { locale: vi },
+                        )}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">Chọn ngày sinh</span>
+                      <span className="text-muted-foreground">
+                        Chọn ngày sinh
+                      </span>
                     )}
                   </button>
                 </PopoverTrigger>
@@ -400,9 +425,16 @@ export function PatientFormDialog({
                     mode="single"
                     locale={vi}
                     captionLayout="dropdown"
-                    selected={dateOfBirth ? dateOnlyStringToDate(dateOfBirth) : undefined}
+                    selected={
+                      dateOfBirth
+                        ? dateOnlyStringToDate(dateOfBirth)
+                        : undefined
+                    }
                     onSelect={(date) => {
-                      form.setValue("dateOfBirth", date ? dateToDateOnlyString(date) : "");
+                      form.setValue(
+                        "dateOfBirth",
+                        date ? dateToDateOnlyString(date) : "",
+                      );
                       setDobOpen(false);
                     }}
                   />
@@ -444,7 +476,9 @@ export function PatientFormDialog({
 
           <div className="mt-3.5 grid grid-cols-2 gap-3.5">
             <div>
-              <div className="text-[11.5px] text-muted-foreground">Giới tính</div>
+              <div className="text-[11.5px] text-muted-foreground">
+                Giới tính
+              </div>
               <div className="mt-1.5 flex gap-2">
                 {GENDER_OPTIONS.map((g) => {
                   const active = gender === g.value;
@@ -456,8 +490,16 @@ export function PatientFormDialog({
                       className="cursor-pointer rounded-full border px-4 py-1.5 text-[12.5px] font-medium transition-[filter] hover:brightness-95"
                       style={
                         active
-                          ? { background: "#0f7a73", color: "#ffffff", borderColor: "#0f7a73" }
-                          : { background: "#ffffff", color: "#4a6664", borderColor: "#dde8e7" }
+                          ? {
+                              background: "#0f7a73",
+                              color: "#ffffff",
+                              borderColor: "#0f7a73",
+                            }
+                          : {
+                              background: "#ffffff",
+                              color: "#4a6664",
+                              borderColor: "#dde8e7",
+                            }
                       }
                     >
                       {g.label}
@@ -468,7 +510,9 @@ export function PatientFormDialog({
             </div>
 
             <div>
-              <div className="text-[11.5px] text-muted-foreground">Trạng thái hồ sơ</div>
+              <div className="text-[11.5px] text-muted-foreground">
+                Trạng thái hồ sơ
+              </div>
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {TAG_OPTIONS.map((t) => {
                   const active = tag === t;
@@ -480,8 +524,16 @@ export function PatientFormDialog({
                       className="cursor-pointer rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-[filter] hover:brightness-95"
                       style={
                         active
-                          ? { background: "#0f7a73", color: "#ffffff", borderColor: "#0f7a73" }
-                          : { background: "#ffffff", color: "#4a6664", borderColor: "#dde8e7" }
+                          ? {
+                              background: "#0f7a73",
+                              color: "#ffffff",
+                              borderColor: "#0f7a73",
+                            }
+                          : {
+                              background: "#ffffff",
+                              color: "#4a6664",
+                              borderColor: "#dde8e7",
+                            }
                       }
                     >
                       {t}
@@ -503,7 +555,11 @@ export function PatientFormDialog({
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Hủy
           </Button>
-          <Button type="submit" form="patient-form" disabled={form.formState.isSubmitting}>
+          <Button
+            type="submit"
+            form="patient-form"
+            disabled={form.formState.isSubmitting}
+          >
             {form.formState.isSubmitting ? "Đang lưu..." : "Lưu"}
           </Button>
         </DialogFooter>
