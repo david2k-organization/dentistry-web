@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Download, MoreVertical, Plus, Search, Upload } from "lucide-react";
 import { AxiosError } from "axios";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { deletePatient, getPatients } from "@/features/patients/api";
 import { DeletePatientDialog } from "@/features/patients/DeletePatientDialog";
+import { exportPatientsToExcel } from "@/features/patients/excel";
+import { ImportPatientsDialog } from "@/features/patients/ImportPatientsDialog";
 import { PatientFormDialog } from "@/features/patients/PatientFormDialog";
 import { PatientTable } from "@/features/patients/PatientTable";
 import type { Patient } from "@/features/patients/types";
@@ -25,6 +34,8 @@ export function PatientsPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const loadPatients = useCallback(
     async (params: { searchKey: string; pageIndex: number; pageSize: number }) => {
@@ -85,6 +96,31 @@ export function PatientsPage() {
     });
   };
 
+  const handleImported = (imported: Patient[]) => {
+    setPatients((prev) => [...imported, ...prev]);
+    setTotal((t) => t + imported.length);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { data } = await getPatients({
+        searchKey: debouncedSearch,
+        pageSize: 1000,
+      });
+      if (data.length === 0) {
+        toast.info("Không có bệnh nhân để xuất.");
+        return;
+      }
+      exportPatientsToExcel(data);
+      toast.success(`Đã xuất ${data.length} bệnh nhân ra Excel.`);
+    } catch {
+      toast.error("Không thể xuất file Excel.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!patientPendingDelete) return;
     setDeleting(true);
@@ -139,6 +175,23 @@ export function PatientsPage() {
               <Plus className="size-4.25" />
               Thêm bệnh nhân
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="Thêm thao tác">
+                  <MoreVertical className="size-4.25" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={handleExport} disabled={exporting}>
+                  <Download />
+                  Xuất Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                  <Upload />
+                  Nhập Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       />
@@ -148,6 +201,12 @@ export function PatientsPage() {
         onOpenChange={setFormOpen}
         patient={editingPatient}
         onSaved={handleSaved}
+      />
+
+      <ImportPatientsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={handleImported}
       />
 
       <DeletePatientDialog
