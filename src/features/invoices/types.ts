@@ -1,9 +1,9 @@
 export type OrderStatus =
-  | "CREATED"
-  | "PENDING"
+  | "DRAFT"
+  | "ISSUED"
+  | "PARTIALLY_PAID"
   | "PAID"
-  | "CANCELLED"
-  | "REFUNDED";
+  | "VOIDED";
 
 /** Dịch vụ (rút gọn) được include trong mỗi order item. */
 export type OrderItemService = {
@@ -34,7 +34,7 @@ export type Order = {
   totalAmount: string;
   status: OrderStatus;
   note: string | null;
-  /** Lý do hủy — thường chỉ set khi status = CANCELLED. */
+  /** Lý do hủy — thường chỉ set khi status = VOIDED. */
   cancelReason: string | null;
   createdBy: string;
   createdAt: string;
@@ -86,30 +86,30 @@ export const ORDER_STATUS_META: Record<
   OrderStatus,
   { label: string; className: string; description: string }
 > = {
-  CREATED: {
-    label: "Chờ thu",
-    className: "bg-[#fdf3e8] text-[#9a6524]",
-    description: "Đơn mới tạo, chưa thu tiền",
+  DRAFT: {
+    label: "Nháp",
+    className: "bg-[#f1f4f4] text-[#7e8f8e]",
+    description: "Hoá đơn nháp, chưa xuất — có thể sửa tự do",
   },
-  PENDING: {
-    label: "Chờ xử lý",
+  ISSUED: {
+    label: "Đã xuất",
     className: "bg-[#fdf3e8] text-[#9a6524]",
-    description: "Đang chờ xử lý / thanh toán",
+    description: "Đã xuất hoá đơn, chờ thanh toán — không thể sửa",
+  },
+  PARTIALLY_PAID: {
+    label: "Thu 1 phần",
+    className: "bg-[#eef3fb] text-[#3f5f9a]",
+    description: "Đã thanh toán một phần",
   },
   PAID: {
     label: "Đã thu",
     className: "bg-[#eef6f1] text-[#3f7a55]",
-    description: "Đã thu đủ tiền",
+    description: "Đã thanh toán đủ",
   },
-  CANCELLED: {
+  VOIDED: {
     label: "Đã huỷ",
-    className: "bg-[#f1f4f4] text-[#7e8f8e]",
-    description: "Đơn đã huỷ, không tính doanh thu",
-  },
-  REFUNDED: {
-    label: "Đã hoàn tiền",
-    className: "bg-[#f4eef1] text-[#8a4a63]",
-    description: "Đã hoàn tiền cho khách",
+    className: "bg-[#faeceb] text-[#a4553a]",
+    description: "Hoá đơn đã huỷ, không tính doanh thu",
   },
 };
 
@@ -124,11 +124,26 @@ export function orderItemsToInput(order: Order): OrderItemInput[] {
   }));
 }
 
-/** Đơn còn hiệu lực (chưa huỷ / hoàn tiền). */
+/** Đơn còn hiệu lực (chưa huỷ). */
 export function isVoided(order: Order): boolean {
-  return order.status === "CANCELLED" || order.status === "REFUNDED";
+  return order.status === "VOIDED";
 }
 
 export function isPaid(order: Order): boolean {
   return order.status === "PAID";
+}
+
+/** Chỉ hoá đơn nháp mới được sửa tự do. */
+export function isEditable(order: Order): boolean {
+  return order.status === "DRAFT";
+}
+
+/** Có thể huỷ khi chưa thanh toán (một phần hay toàn bộ) và chưa huỷ. */
+export function isVoidable(order: Order): boolean {
+  return order.status === "DRAFT" || order.status === "ISSUED";
+}
+
+/** Có thể ghi nhận thanh toán — đã xuất hoá đơn và chưa trả đủ. */
+export function isPayable(order: Order): boolean {
+  return order.status === "ISSUED" || order.status === "PARTIALLY_PAID";
 }

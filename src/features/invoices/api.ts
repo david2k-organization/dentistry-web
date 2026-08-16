@@ -6,7 +6,7 @@ import {
 } from "@/lib/api";
 import type { CreateOrderInput, Order, UpdateOrderInput } from "./types";
 
-const BASE = "/orders";
+const BASE = "/invoices";
 
 export type OrderListParams = {
   page?: number;
@@ -51,7 +51,7 @@ export async function getOrder(id: string): Promise<Order | null> {
 /**
  * Tạo đơn hàng. ⚠️ Response của POST có `services` **rỗng** (item ghi sau khi
  * đọc order để trả về) — gọi `getOrder(id)` nếu cần danh sách dịch vụ đầy đủ.
- * `status`/`code` trong body bị bỏ qua (server set `CREATED` + tự sinh mã).
+ * `status`/`code` trong body bị bỏ qua (server set `DRAFT` + tự sinh mã).
  */
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
   const res = await api.post<ApiEnvelope<Order>>(BASE, input);

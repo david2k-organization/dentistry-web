@@ -25,6 +25,7 @@ import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index'
 import { Route as AuthenticatedAppointmentsIndexRouteImport } from './routes/_authenticated/appointments/index'
 import { Route as AuthenticatedPatientsPatientIdRouteImport } from './routes/_authenticated/patients/$patientId'
+import { Route as AuthenticatedInvoicesIdRouteImport } from './routes/_authenticated/invoices/$id'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -114,12 +115,18 @@ const AuthenticatedPatientsPatientIdRoute =
     path: '/patients/$patientId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedInvoicesIdRoute = AuthenticatedInvoicesIdRouteImport.update({
+  id: '/invoices/$id',
+  path: '/invoices/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/forgot-password': typeof authForgotPasswordRoute
   '/login': typeof authLoginRoute
   '/register': typeof authRegisterRoute
+  '/invoices/$id': typeof AuthenticatedInvoicesIdRoute
   '/patients/$patientId': typeof AuthenticatedPatientsPatientIdRoute
   '/appointments/': typeof AuthenticatedAppointmentsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/login': typeof authLoginRoute
   '/register': typeof authRegisterRoute
   '/': typeof AuthenticatedIndexRoute
+  '/invoices/$id': typeof AuthenticatedInvoicesIdRoute
   '/patients/$patientId': typeof AuthenticatedPatientsPatientIdRoute
   '/appointments': typeof AuthenticatedAppointmentsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/(auth)/login': typeof authLoginRoute
   '/(auth)/register': typeof authRegisterRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/invoices/$id': typeof AuthenticatedInvoicesIdRoute
   '/_authenticated/patients/$patientId': typeof AuthenticatedPatientsPatientIdRoute
   '/_authenticated/appointments/': typeof AuthenticatedAppointmentsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/invoices/$id'
     | '/patients/$patientId'
     | '/appointments/'
     | '/inventory/'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/'
+    | '/invoices/$id'
     | '/patients/$patientId'
     | '/appointments'
     | '/inventory'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/(auth)/login'
     | '/(auth)/register'
     | '/_authenticated/'
+    | '/_authenticated/invoices/$id'
     | '/_authenticated/patients/$patientId'
     | '/_authenticated/appointments/'
     | '/_authenticated/inventory/'
@@ -344,11 +356,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPatientsPatientIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/invoices/$id': {
+      id: '/_authenticated/invoices/$id'
+      path: '/invoices/$id'
+      fullPath: '/invoices/$id'
+      preLoaderRoute: typeof AuthenticatedInvoicesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedInvoicesIdRoute: typeof AuthenticatedInvoicesIdRoute
   AuthenticatedPatientsPatientIdRoute: typeof AuthenticatedPatientsPatientIdRoute
   AuthenticatedAppointmentsIndexRoute: typeof AuthenticatedAppointmentsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
@@ -364,6 +384,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedInvoicesIdRoute: AuthenticatedInvoicesIdRoute,
   AuthenticatedPatientsPatientIdRoute: AuthenticatedPatientsPatientIdRoute,
   AuthenticatedAppointmentsIndexRoute: AuthenticatedAppointmentsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,

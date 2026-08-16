@@ -39,7 +39,7 @@ export type InvoiceFormResult = {
   doctorId: string;
   note: string;
   lines: InvoiceFormLine[];
-  markPaid: boolean;
+  markIssued: boolean;
 };
 
 const invoiceFormSchema = z.object({
@@ -169,7 +169,7 @@ export function InvoiceFormDialog({
     });
   };
 
-  const submit = (markPaid: boolean) =>
+  const submit = (markIssued: boolean) =>
     form.handleSubmit((values) => {
       if (lines.length === 0) return;
       onSave({
@@ -181,7 +181,7 @@ export function InvoiceFormDialog({
         doctorId: values.doctorId,
         note: values.note,
         lines,
-        markPaid,
+        markIssued,
       });
       onOpenChange(false);
     });
@@ -375,7 +375,7 @@ export function InvoiceFormDialog({
               onClick={submit(true)}
               className="border-[#cfe0df] text-primary hover:bg-accent"
             >
-              Lưu và thu ngay
+              Lưu và xuất ngay
             </Button>
           )}
           <Button

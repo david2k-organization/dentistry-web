@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { AxiosError } from "axios";
-import { Ban, Loader2, Pencil, Receipt } from "lucide-react";
+import { Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,11 +10,19 @@ import type { Service } from "@/features/services/types";
 import { getUsers } from "@/features/users/api";
 import type { User } from "@/features/users/types";
 import { CancelInvoiceDialog } from "./CancelInvoiceDialog";
+import { errMessage, fmt } from "./format";
 import { InvoiceFormDialog, type InvoiceFormResult } from "./InvoiceFormDialog";
+import { InvoiceTable } from "./InvoiceTable";
+import { PaymentDialog } from "./PaymentDialog";
 import { UpdateStatusDialog } from "./UpdateStatusDialog";
 import { createOrder, getOrder, getOrders, updateOrder } from "./api";
+import { netPaidByInvoice } from "./payment-types";
+import { getPayments } from "./payments-api";
 import {
+  isEditable,
   isPaid,
+  isPayable,
+  isVoidable,
   isVoided,
   orderItemsToInput,
   ORDER_STATUS_META,
@@ -24,34 +31,6 @@ import {
   type OrderItemInput,
   type OrderStatus,
 } from "./types";
-
-const vnd = new Intl.NumberFormat("vi-VN");
-const fmt = (n: number) => `${vnd.format(n)} đ`;
-const dateFmt = new Intl.DateTimeFormat("vi-VN", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : dateFmt.format(d);
-};
-
-const errMessage = (err: unknown, fallback: string) =>
-  (err instanceof AxiosError
-    ? (err.response?.data as { message?: string } | undefined)?.message
-    : undefined) ?? fallback;
-
-function summaryOf(order: Order): string {
-  if (isVoided(order))
-    return order.cancelReason ? `Đã huỷ · ${order.cancelReason}` : "Đã huỷ";
-  const names = order.services.map((s) => s.service?.name ?? "Dịch vụ");
-  return names.length ? names.join(", ") : "—";
-}
-
-function statusOf(order: Order): { label: string; className: string } {
-  return ORDER_STATUS_META[order.status];
-}
 
 /** Dựng danh sách item cho payload từ các dòng của form. */
 function linesToServices(lines: InvoiceFormResult["lines"]): OrderItemInput[] {
@@ -64,14 +43,13 @@ function linesToServices(lines: InvoiceFormResult["lines"]): OrderItemInput[] {
   }));
 }
 
-const COLS = "grid grid-cols-[1fr_1.5fr_1.8fr_1fr_1fr_0.9fr_88px] gap-3";
-
 export function InvoicesPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
+  const [paidMap, setPaidMap] = useState<Record<string, number>>({});
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Order | null>(null);
@@ -80,6 +58,7 @@ export function InvoicesPage() {
     null,
   );
   const [statusInvoice, setStatusInvoice] = useState<Order | null>(null);
+  const [payingInvoice, setPayingInvoice] = useState<Order | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -87,18 +66,30 @@ export function InvoicesPage() {
       getPatients({ pageSize: 100 }),
       getServices({ pageSize: 100 }),
       getUsers({ roleName: "Bác sĩ", pageSize: 100 }),
+      getPayments({ pageSize: 200 }),
     ])
-      .then(([orderPage, patientPage, servicePage, doctorPage]) => {
+      .then(([orderPage, patientPage, servicePage, doctorPage, paymentPage]) => {
         setOrders(orderPage.data);
         setPatients(patientPage.data);
         setServices(servicePage.data);
         setDoctors(doctorPage.data);
+        setPaidMap(netPaidByInvoice(paymentPage.data));
       })
       .catch((err) => {
         toast.error(errMessage(err, "Không thể tải danh sách hoá đơn."));
       })
       .finally(() => setLoading(false));
   }, []);
+
+  /** Nạp lại tổng đã thu của một hoá đơn sau khi ghi nhận thanh toán mới. */
+  const refreshPaidFor = (invoiceId: string) => {
+    getPayments({ invoiceId, pageSize: 200 }).then((page) => {
+      setPaidMap((prev) => ({
+        ...prev,
+        [invoiceId]: netPaidByInvoice(page.data)[invoiceId] ?? 0,
+      }));
+    });
+  };
 
   const live = orders.filter((o) => !isVoided(o));
   const unpaid = live
@@ -113,12 +104,10 @@ export function InvoicesPage() {
   ];
 
   const openEdit = async (order: Order) => {
-    if (isPaid(order)) {
-      toast.error("Hoá đơn đã thu — không sửa được");
-      return;
-    }
-    if (isVoided(order)) {
-      toast.error("Hoá đơn đã huỷ — không sửa được");
+    if (!isEditable(order)) {
+      toast.error(
+        `Hoá đơn đang ở trạng thái "${ORDER_STATUS_META[order.status].label}" — không sửa được`,
+      );
       return;
     }
     if (editLoadingId) return;
@@ -147,15 +136,25 @@ export function InvoicesPage() {
   };
 
   const requestCancel = (order: Order) => {
-    if (isPaid(order)) {
-      toast.error("Hoá đơn đã thu — cần hoàn tiền thay vì huỷ");
-      return;
-    }
-    if (isVoided(order)) {
-      toast.error("Hoá đơn đã huỷ");
+    if (!isVoidable(order)) {
+      toast.error(
+        isVoided(order)
+          ? "Hoá đơn đã huỷ"
+          : `Hoá đơn đang ở trạng thái "${ORDER_STATUS_META[order.status].label}" — không thể huỷ`,
+      );
       return;
     }
     setCancellingInvoice(order);
+  };
+
+  const requestPay = (order: Order) => {
+    if (!isPayable(order)) {
+      toast.error(
+        `Hoá đơn đang ở trạng thái "${ORDER_STATUS_META[order.status].label}" — không thể thu tiền`,
+      );
+      return;
+    }
+    setPayingInvoice(order);
   };
 
   const handleSave = async (result: InvoiceFormResult) => {
@@ -170,14 +169,14 @@ export function InvoicesPage() {
           totalAmount,
           note,
           services: servicesPayload,
-          ...(result.markPaid ? { status: "PAID" as const } : {}),
+          ...(result.markIssued ? { status: "ISSUED" as const } : {}),
         });
         setOrders((prev) =>
           prev.map((o) => (o.id === updated.id ? updated : o)),
         );
         toast.success(
-          result.markPaid
-            ? `Đã cập nhật và thu ${fmt(totalAmount)}`
+          result.markIssued
+            ? `Đã cập nhật và xuất hoá đơn ${updated.code}`
             : `Đã cập nhật hoá đơn ${updated.code}`,
         );
       } else {
@@ -189,9 +188,9 @@ export function InvoicesPage() {
           services: servicesPayload,
         });
 
-        const full = result.markPaid
+        const full = result.markIssued
           ? await updateOrder(created.id, {
-              status: "PAID",
+              status: "ISSUED",
               totalAmount,
               note,
               services: servicesPayload,
@@ -199,8 +198,8 @@ export function InvoicesPage() {
           : ((await getOrder(created.id)) ?? created);
         setOrders((prev) => [full, ...prev]);
         toast.success(
-          result.markPaid
-            ? `Đã tạo và thu ${fmt(totalAmount)} — ${result.patientName}`
+          result.markIssued
+            ? `Đã tạo và xuất hoá đơn ${full.code} · ${fmt(totalAmount)}`
             : `Đã tạo hoá đơn ${full.code} · ${fmt(totalAmount)}`,
         );
       }
@@ -214,7 +213,7 @@ export function InvoicesPage() {
     const cancelReason = [reason, note.trim()].filter(Boolean).join(" — ");
     try {
       const updated = await updateOrder(cancellingInvoice.id, {
-        status: "CANCELLED",
+        status: "VOIDED",
         cancelReason,
         services: orderItemsToInput(cancellingInvoice),
       });
@@ -263,117 +262,25 @@ export function InvoicesPage() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-        <div className="flex items-center gap-3 border-b border-[#e6efee] px-[18px] py-[15px]">
-          <div className="text-[14.5px] font-semibold text-foreground">
-            Danh sách hoá đơn
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {live.length} hoá đơn hiệu lực · {orders.filter(isVoided).length} đã
-            huỷ
-          </div>
-          <div className="flex-1" />
+      <InvoiceTable
+        orders={orders}
+        loading={loading}
+        paidMap={paidMap}
+        editLoadingId={editLoadingId}
+        onChangeStatus={setStatusInvoice}
+        onPay={requestPay}
+        onEdit={openEdit}
+        onCancel={requestCancel}
+        countLabel={() =>
+          `${live.length} hoá đơn hiệu lực · ${orders.filter(isVoided).length} đã huỷ`
+        }
+        actions={
           <Button onClick={openCreate} className="gap-1.5">
             <Receipt className="size-[17px]" />
             Tạo hoá đơn
           </Button>
-        </div>
-
-        <div
-          className={`${COLS} border-b border-[#e6efee] bg-[#f7fbfa] px-[18px] py-3 text-[11.5px] font-medium tracking-[0.04em] text-muted-foreground uppercase`}
-        >
-          <div>Số HĐ</div>
-          <div>Bệnh nhân</div>
-          <div>Nội dung</div>
-          <div>Ngày</div>
-          <div className="text-right">Số tiền</div>
-          <div className="text-right">Trạng thái</div>
-          <div className="text-right">Thao tác</div>
-        </div>
-
-        {loading && (
-          <div className="px-[18px] py-8 text-center text-[13px] text-muted-foreground">
-            Đang tải hoá đơn…
-          </div>
-        )}
-
-        {!loading && orders.length === 0 && (
-          <div className="px-[18px] py-8 text-center text-[13px] text-muted-foreground">
-            Chưa có hoá đơn nào.
-          </div>
-        )}
-
-        {!loading &&
-          orders.map((o) => {
-            const status = statusOf(o);
-            const voided = isVoided(o);
-            const locked = isPaid(o) || voided;
-            return (
-              <div
-                key={o.id}
-                className={`${COLS} items-center border-b border-[#f0f5f4] px-[18px] py-[13px] text-[13px] last:border-0 hover:bg-[#f7fbfa]`}
-                style={{ opacity: voided ? 0.72 : 1 }}
-              >
-                <div
-                  className="cursor-pointer tabular-nums text-[#4a6664]"
-                  style={{ textDecoration: voided ? "line-through" : "none" }}
-                  onClick={() => openEdit(o)}
-                >
-                  {o.code}
-                </div>
-                <div
-                  className="cursor-pointer font-medium text-foreground"
-                  onClick={() => openEdit(o)}
-                >
-                  {o.patient?.fullName ?? "—"}
-                </div>
-                <div className="truncate text-[#4a6664]">{summaryOf(o)}</div>
-                <div className="tabular-nums text-[#4a6664]">
-                  {formatDate(o.createdAt)}
-                </div>
-                <div
-                  className="text-right font-semibold tabular-nums text-foreground"
-                  style={{ textDecoration: voided ? "line-through" : "none" }}
-                >
-                  {fmt(orderTotal(o))}
-                </div>
-                <div className="text-right">
-                  <button
-                    type="button"
-                    title="Đổi trạng thái"
-                    onClick={() => setStatusInvoice(o)}
-                    className={`inline-block cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-[filter] hover:brightness-95 ${status.className}`}
-                  >
-                    {status.label}
-                  </button>
-                </div>
-                <div className="flex justify-end gap-1.5">
-                  <button
-                    type="button"
-                    title={locked ? "Không thể sửa" : "Sửa hoá đơn"}
-                    onClick={() => openEdit(o)}
-                    disabled={editLoadingId === o.id}
-                    className="grid size-[30px] cursor-pointer place-items-center rounded-[9px] border border-border bg-card text-[#4a6664] hover:border-[#cfe0df] hover:bg-accent hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {editLoadingId === o.id ? (
-                      <Loader2 className="size-[17px] animate-spin" />
-                    ) : (
-                      <Pencil className="size-[17px]" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    title={locked ? "Không thể huỷ" : "Huỷ hoá đơn"}
-                    onClick={() => requestCancel(o)}
-                    className="grid size-[30px] cursor-pointer place-items-center rounded-[9px] border border-border bg-card text-[#4a6664] hover:border-[#e6cdbf] hover:bg-[#fbeeea] hover:text-[#a4553a]"
-                  >
-                    <Ban className="size-[17px]" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-      </div>
+        }
+      />
 
       <InvoiceFormDialog
         open={formOpen}
@@ -395,6 +302,17 @@ export function InvoicesPage() {
         invoice={statusInvoice}
         onOpenChange={(open) => !open && setStatusInvoice(null)}
         onConfirm={handleConfirmStatus}
+      />
+
+      <PaymentDialog
+        invoice={payingInvoice}
+        onOpenChange={(open) => !open && setPayingInvoice(null)}
+        onRecorded={(updated) => {
+          setOrders((prev) =>
+            prev.map((o) => (o.id === updated.id ? updated : o)),
+          );
+          refreshPaidFor(updated.id);
+        }}
       />
     </div>
   );

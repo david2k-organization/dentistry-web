@@ -16,20 +16,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ORDER_STATUS_META, type Order, type OrderStatus } from "./types";
 
-/** Các trạng thái người dùng có thể chuyển sang từ dialog này. */
-const SELECTABLE: OrderStatus[] = [
-  "CREATED",
-  "PENDING",
-  "PAID",
-  "CANCELLED",
-  "REFUNDED",
-];
+/**
+ * Các trạng thái người dùng có thể chuyển tay từ dialog này. `PARTIALLY_PAID`
+ * và `PAID` không có ở đây — backend tự đồng bộ 2 trạng thái này dựa trên
+ * lịch sử thanh toán (`POST /payments`, xem payments-api.md) nên không cho
+ * set tay để tránh lệch với số liệu thực thu.
+ */
+const SELECTABLE: OrderStatus[] = ["DRAFT", "ISSUED", "VOIDED"];
 
 /** Trạng thái cần kèm lý do (map sang `cancelReason`). */
-const NEEDS_REASON: OrderStatus[] = ["CANCELLED", "REFUNDED"];
+const NEEDS_REASON: OrderStatus[] = ["VOIDED"];
 
 const statusFormSchema = z.object({
-  status: z.enum(["CREATED", "PENDING", "PAID", "CANCELLED", "REFUNDED"]),
+  status: z.enum(["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "VOIDED"]),
   reason: z.string(),
 });
 
@@ -48,7 +47,7 @@ export function UpdateStatusDialog({
 }: UpdateStatusDialogProps) {
   const form = useForm<StatusFormValues>({
     resolver: zodResolver(statusFormSchema),
-    defaultValues: { status: "CREATED", reason: "" },
+    defaultValues: { status: "DRAFT", reason: "" },
   });
 
   useEffect(() => {
@@ -109,7 +108,7 @@ export function UpdateStatusDialog({
           {needsReason && (
             <div className="mt-3">
               <div className="text-[11.5px] text-muted-foreground">
-                Lý do {status === "REFUNDED" ? "hoàn tiền" : "huỷ"} (không bắt buộc)
+                Lý do huỷ (không bắt buộc)
               </div>
               <Textarea
                 className="mt-1.5 min-h-[56px]"
