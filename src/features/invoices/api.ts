@@ -4,27 +4,25 @@ import {
   type ApiEnvelope,
   type Paginated,
 } from "@/lib/api";
-import type { CreateOrderInput, Order, UpdateOrderInput } from "./types";
+import type {
+  CreateOrderInput,
+  Order,
+  UpdateOrderInput,
+  UpdateOrderStatusInput,
+} from "./types";
 
 const BASE = "/invoices";
 
 export type OrderListParams = {
   page?: number;
   pageSize?: number;
-  /** Tìm gần đúng theo mã đơn (contains, không phân biệt hoa/thường). */
   code?: string;
   patientId?: string;
   doctorId?: string;
-  /** ISO date; lọc createdAt >= startDate. */
   startDate?: string;
-  /** ISO date; lọc createdAt <= endDate (nhớ kèm giờ để "đến hết ngày"). */
   endDate?: string;
 };
 
-/**
- * Danh sách đơn hàng (phân trang, mới nhất trước) kèm `patient`, `doctor` và
- * `services[]`.
- */
 export async function getOrders(
   params: OrderListParams = {},
 ): Promise<Paginated<Order>> {
@@ -42,27 +40,31 @@ export async function getOrders(
   return normalizePaginated(res.data);
 }
 
-/** Chi tiết đơn kèm `services[]` đầy đủ. Trả `null` nếu không tìm thấy. */
 export async function getOrder(id: string): Promise<Order | null> {
   const res = await api.get<ApiEnvelope<Order | null>>(`${BASE}/${id}`);
   return res.data.data;
 }
 
-/**
- * Tạo đơn hàng. ⚠️ Response của POST có `services` **rỗng** (item ghi sau khi
- * đọc order để trả về) — gọi `getOrder(id)` nếu cần danh sách dịch vụ đầy đủ.
- * `status`/`code` trong body bị bỏ qua (server set `DRAFT` + tự sinh mã).
- */
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
   const res = await api.post<ApiEnvelope<Order>>(BASE, input);
   return res.data.data;
 }
 
-/** Cập nhật đơn — trả về order mới kèm `patient`, `doctor`, `services[]` mới. */
 export async function updateOrder(
   id: string,
   input: UpdateOrderInput,
 ): Promise<Order> {
   const res = await api.put<ApiEnvelope<Order>>(`${BASE}/${id}`, input);
+  return res.data.data;
+}
+
+export async function updateOrderStatus(
+  id: string,
+  input: UpdateOrderStatusInput,
+): Promise<Order> {
+  const res = await api.patch<ApiEnvelope<Order>>(
+    `${BASE}/${id}/status`,
+    input,
+  );
   return res.data.data;
 }

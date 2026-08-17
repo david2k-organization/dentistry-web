@@ -30,12 +30,12 @@ export type Order = {
   code: string;
   patientId: string;
   doctorId: string;
-  // totalAmount là Decimal → chuỗi.
   totalAmount: string;
   status: OrderStatus;
   note: string | null;
-  /** Lý do hủy — thường chỉ set khi status = VOIDED. */
-  cancelReason: string | null;
+  voidedReason: string | null;
+  voidedAt: string | null;
+  voidedById: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -44,7 +44,6 @@ export type Order = {
   services: OrderItem[];
 };
 
-/** Item khi tạo/cập nhật đơn (số tiền gửi dạng number). */
 export type OrderItemInput = {
   serviceId: string;
   quantity: number;
@@ -57,31 +56,27 @@ export type CreateOrderInput = {
   patientId: string;
   doctorId: string;
   totalAmount: number;
-  /** Ghi chú đơn hàng (tùy chọn). */
   note?: string;
   services: OrderItemInput[];
 };
 
-/**
- * Cập nhật đơn — các field order tùy chọn, `services` **bắt buộc** (backend xóa
- * và thay toàn bộ item cũ bằng danh sách mới, không merge). `cancelReason` chỉ
- * nhận ở endpoint này (dùng khi hủy đơn).
- */
 export type UpdateOrderInput = {
   patientId?: string;
   doctorId?: string;
   totalAmount?: number;
-  status?: OrderStatus;
   note?: string;
-  cancelReason?: string;
   services: OrderItemInput[];
+};
+
+export type UpdateOrderStatusInput = {
+  status: OrderStatus;
+  voidedReason?: string;
 };
 
 export function orderTotal(order: Order): number {
   return Number(order.totalAmount) || 0;
 }
 
-/** Nhãn + màu badge cho từng trạng thái đơn (dùng cho bảng & dialog). */
 export const ORDER_STATUS_META: Record<
   OrderStatus,
   { label: string; className: string; description: string }
@@ -113,18 +108,6 @@ export const ORDER_STATUS_META: Record<
   },
 };
 
-/** Chuyển `services[]` của đơn về payload item (để gửi lại khi PUT). */
-export function orderItemsToInput(order: Order): OrderItemInput[] {
-  return order.services.map((s) => ({
-    serviceId: s.serviceId,
-    quantity: s.quantity,
-    unitPrice: Number(s.unitPrice) || 0,
-    amount: Number(s.amount) || 0,
-    ...(s.note ? { note: s.note } : {}),
-  }));
-}
-
-/** Đơn còn hiệu lực (chưa huỷ). */
 export function isVoided(order: Order): boolean {
   return order.status === "VOIDED";
 }
@@ -133,17 +116,14 @@ export function isPaid(order: Order): boolean {
   return order.status === "PAID";
 }
 
-/** Chỉ hoá đơn nháp mới được sửa tự do. */
 export function isEditable(order: Order): boolean {
   return order.status === "DRAFT";
 }
 
-/** Có thể huỷ khi chưa thanh toán (một phần hay toàn bộ) và chưa huỷ. */
 export function isVoidable(order: Order): boolean {
   return order.status === "DRAFT" || order.status === "ISSUED";
 }
 
-/** Có thể ghi nhận thanh toán — đã xuất hoá đơn và chưa trả đủ. */
 export function isPayable(order: Order): boolean {
   return order.status === "ISSUED" || order.status === "PARTIALLY_PAID";
 }

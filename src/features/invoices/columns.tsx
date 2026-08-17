@@ -16,7 +16,7 @@ import {
 
 function summaryOf(order: Order): string {
   if (isVoided(order))
-    return order.cancelReason ? `Đã huỷ · ${order.cancelReason}` : "Đã huỷ";
+    return order.voidedReason ? `Đã huỷ · ${order.voidedReason}` : "Đã huỷ";
   const names = order.services.map((s) => s.service?.name ?? "Dịch vụ");
   return names.length ? names.join(", ") : "—";
 }

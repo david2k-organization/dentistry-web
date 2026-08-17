@@ -16,21 +16,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ORDER_STATUS_META, type Order, type OrderStatus } from "./types";
 
-/**
- * Các trạng thái người dùng có thể chuyển tay từ dialog này. `PARTIALLY_PAID`
- * và `PAID` không có ở đây — backend tự đồng bộ 2 trạng thái này dựa trên
- * lịch sử thanh toán (`POST /payments`, xem payments-api.md) nên không cho
- * set tay để tránh lệch với số liệu thực thu.
- */
 const SELECTABLE: OrderStatus[] = ["DRAFT", "ISSUED", "VOIDED"];
 
-/** Trạng thái cần kèm lý do (map sang `cancelReason`). */
 const NEEDS_REASON: OrderStatus[] = ["VOIDED"];
 
-const statusFormSchema = z.object({
-  status: z.enum(["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "VOIDED"]),
-  reason: z.string(),
-});
+const statusFormSchema = z
+  .object({
+    status: z.enum(["DRAFT", "ISSUED", "PARTIALLY_PAID", "PAID", "VOIDED"]),
+    reason: z.string(),
+  })
+  .refine((v) => v.status !== "VOIDED" || v.reason.trim().length > 0, {
+    path: ["reason"],
+    message: "Vui lòng nhập lý do huỷ",
+  });
 
 type StatusFormValues = z.input<typeof statusFormSchema>;
 
@@ -107,14 +105,17 @@ export function UpdateStatusDialog({
 
           {needsReason && (
             <div className="mt-3">
-              <div className="text-[11.5px] text-muted-foreground">
-                Lý do huỷ (không bắt buộc)
-              </div>
+              <div className="text-[11.5px] text-muted-foreground">Lý do huỷ</div>
               <Textarea
                 className="mt-1.5 min-h-[56px]"
                 placeholder="Ghi rõ lý do để đối chiếu sau này"
                 {...form.register("reason")}
               />
+              {form.formState.errors.reason && (
+                <p className="mt-1 text-[12px] text-destructive">
+                  {form.formState.errors.reason.message}
+                </p>
+              )}
             </div>
           )}
         </form>
