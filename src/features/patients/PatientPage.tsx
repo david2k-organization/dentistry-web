@@ -11,9 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { deletePatient, getPatients } from "@/features/patients/api";
+import {
+  deletePatient,
+  exportPatients,
+  getPatients,
+} from "@/features/patients/api";
 import { DeletePatientDialog } from "@/features/patients/DeletePatientDialog";
-import { exportPatientsToExcel } from "@/features/patients/excel";
 import { ImportPatientsDialog } from "@/features/patients/ImportPatientsDialog";
 import { PatientFormDialog } from "@/features/patients/PatientFormDialog";
 import { PatientTable } from "@/features/patients/PatientTable";
@@ -96,24 +99,15 @@ export function PatientsPage() {
     });
   };
 
-  const handleImported = (imported: Patient[]) => {
-    setPatients((prev) => [...imported, ...prev]);
-    setTotal((t) => t + imported.length);
+  const handleImported = () => {
+    loadPatients({ searchKey: debouncedSearch, pageIndex, pageSize });
   };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const { data } = await getPatients({
-        searchKey: debouncedSearch,
-        pageSize: 1000,
-      });
-      if (data.length === 0) {
-        toast.info("Không có bệnh nhân để xuất.");
-        return;
-      }
-      exportPatientsToExcel(data);
-      toast.success(`Đã xuất ${data.length} bệnh nhân ra Excel.`);
+      await exportPatients(debouncedSearch);
+      toast.success("Đã xuất danh sách bệnh nhân ra Excel.");
     } catch {
       toast.error("Không thể xuất file Excel.");
     } finally {

@@ -6,6 +6,7 @@ import { AxiosError } from "axios";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
+import { GoogleIcon } from "@/components/icons/GoogleIcon";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,25 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       <Button type="submit" className="mt-6 w-full" disabled={form.formState.isSubmitting}>
         {form.formState.isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
+      </Button>
+
+      <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        <span>Hoặc</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => {
+          // TODO: nối luồng đăng nhập Google khi backend sẵn sàng
+          toast.info("Đăng nhập bằng Google sẽ sớm được hỗ trợ.");
+        }}
+      >
+        <GoogleIcon className="size-4" />
+        Đăng nhập bằng Google
       </Button>
     </form>
   );
