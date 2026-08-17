@@ -16,7 +16,7 @@ import { InvoiceFormDialog, type InvoiceFormResult } from "./InvoiceFormDialog";
 import { PaymentDialog } from "./PaymentDialog";
 import { PaymentHistoryDialog } from "./PaymentHistoryDialog";
 import { UpdateStatusDialog } from "./UpdateStatusDialog";
-import { getOrder, updateOrder } from "./api";
+import { getOrder, updateOrder, updateOrderStatus } from "./api";
 import {
   isVoidedPayment,
   netPaid,
@@ -30,7 +30,6 @@ import {
   isPayable,
   isVoidable,
   isVoided,
-  orderItemsToInput,
   ORDER_STATUS_META,
   orderTotal,
   type Order,
@@ -106,9 +105,7 @@ export function InvoiceDetailPage() {
       setPatients(patientPage.data);
       setServices(servicePage.data);
       setDoctors(doctorPage.data);
-      setStaffMap(
-        Object.fromEntries(staffPage.data.map((u) => [u.id, u])),
-      );
+      setStaffMap(Object.fromEntries(staffPage.data.map((u) => [u.id, u])));
     });
   }, []);
 
@@ -145,10 +142,22 @@ export function InvoiceDetailPage() {
         totalAmount,
         note,
         services: servicesPayload,
-        ...(result.markIssued ? { status: "ISSUED" as const } : {}),
       });
-      setInvoice(updated);
-      toast.success(`Đã cập nhật hoá đơn ${updated.code}`);
+      // Xuất hoá đơn là một lần đổi trạng thái riêng (PATCH /:id/status). Giữ
+      // `services` đầy đủ từ PUT, chỉ lấy trạng thái mới từ PATCH.
+      let final = updated;
+      if (result.markIssued) {
+        const issued = await updateOrderStatus(updated.id, {
+          status: "ISSUED",
+        });
+        final = {
+          ...updated,
+          status: issued.status,
+          updatedAt: issued.updatedAt,
+        };
+      }
+      setInvoice(final);
+      toast.success(`Đã cập nhật hoá đơn ${final.code}`);
     } catch (err) {
       toast.error(errMessage(err, "Không thể lưu hoá đơn."));
     }
@@ -156,12 +165,11 @@ export function InvoiceDetailPage() {
 
   const handleConfirmCancel = async (reason: string, note: string) => {
     if (!invoice) return;
-    const cancelReason = [reason, note.trim()].filter(Boolean).join(" — ");
+    const voidedReason = [reason, note.trim()].filter(Boolean).join(" — ");
     try {
-      const updated = await updateOrder(invoice.id, {
+      const updated = await updateOrderStatus(invoice.id, {
         status: "VOIDED",
-        cancelReason,
-        services: orderItemsToInput(invoice),
+        voidedReason,
       });
       setInvoice(updated);
       toast.success(`Đã huỷ hoá đơn ${updated.code}`);
@@ -174,10 +182,9 @@ export function InvoiceDetailPage() {
   const handleConfirmStatus = async (status: OrderStatus, reason: string) => {
     if (!invoice) return;
     try {
-      const updated = await updateOrder(invoice.id, {
+      const updated = await updateOrderStatus(invoice.id, {
         status,
-        services: orderItemsToInput(invoice),
-        ...(reason ? { cancelReason: reason } : {}),
+        ...(status === "VOIDED" && reason ? { voidedReason: reason } : {}),
       });
       setInvoice(updated);
       toast.success(
@@ -232,22 +239,16 @@ export function InvoiceDetailPage() {
             </button>
           </div>
           <div className="mt-1 text-[13px] text-muted-foreground">
-            {invoice.patient?.fullName ?? "—"} · BS. {invoice.doctor?.fullName ?? "—"} ·{" "}
-            {formatDate(invoice.createdAt)}
+            {invoice.patient?.fullName ?? "—"} · BS.{" "}
+            {invoice.doctor?.fullName ?? "—"} · {formatDate(invoice.createdAt)}
           </div>
-          {invoice.cancelReason && (
+          {invoice.voidedReason && (
             <div className="mt-1 text-[12.5px] text-[#a4553a]">
-              Lý do huỷ: {invoice.cancelReason}
+              Lý do huỷ: {invoice.voidedReason}
             </div>
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2.5">
-          {isPayable(invoice) && (
-            <Button className="gap-1.5" onClick={() => setPaying(true)}>
-              <Wallet className="size-4" />
-              Thanh toán
-            </Button>
-          )}
           {isEditable(invoice) && (
             <Button
               variant="outline"
@@ -323,7 +324,7 @@ export function InvoiceDetailPage() {
                 Thanh toán
               </div>
               <div className="flex-1" />
-              {payments.length > 0 && (
+              {isPayable(invoice) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -335,12 +336,7 @@ export function InvoiceDetailPage() {
                 </Button>
               )}
               {isPayable(invoice) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setPaying(true)}
-                >
+                <Button className="gap-1.5" onClick={() => setPaying(true)}>
                   <Wallet className="size-4" />
                   Thêm thanh toán
                 </Button>

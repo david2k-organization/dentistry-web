@@ -15,7 +15,13 @@ import { InvoiceFormDialog, type InvoiceFormResult } from "./InvoiceFormDialog";
 import { InvoiceTable } from "./InvoiceTable";
 import { PaymentDialog } from "./PaymentDialog";
 import { UpdateStatusDialog } from "./UpdateStatusDialog";
-import { createOrder, getOrder, getOrders, updateOrder } from "./api";
+import {
+  createOrder,
+  getOrder,
+  getOrders,
+  updateOrder,
+  updateOrderStatus,
+} from "./api";
 import { netPaidByInvoice } from "./payment-types";
 import { getPayments } from "./payments-api";
 import {
@@ -24,7 +30,6 @@ import {
   isPayable,
   isVoidable,
   isVoided,
-  orderItemsToInput,
   ORDER_STATUS_META,
   orderTotal,
   type Order,
@@ -169,15 +174,19 @@ export function InvoicesPage() {
           totalAmount,
           note,
           services: servicesPayload,
-          ...(result.markIssued ? { status: "ISSUED" as const } : {}),
         });
-        setOrders((prev) =>
-          prev.map((o) => (o.id === updated.id ? updated : o)),
-        );
+        // Xuất hoá đơn là một lần đổi trạng thái riêng (PATCH /:id/status). Giữ
+        // `services` đầy đủ từ PUT, chỉ lấy trạng thái mới từ PATCH.
+        let final = updated;
+        if (result.markIssued) {
+          const issued = await updateOrderStatus(updated.id, { status: "ISSUED" });
+          final = { ...updated, status: issued.status, updatedAt: issued.updatedAt };
+        }
+        setOrders((prev) => prev.map((o) => (o.id === final.id ? final : o)));
         toast.success(
           result.markIssued
-            ? `Đã cập nhật và xuất hoá đơn ${updated.code}`
-            : `Đã cập nhật hoá đơn ${updated.code}`,
+            ? `Đã cập nhật và xuất hoá đơn ${final.code}`
+            : `Đã cập nhật hoá đơn ${final.code}`,
         );
       } else {
         const created = await createOrder({
@@ -187,15 +196,12 @@ export function InvoicesPage() {
           note,
           services: servicesPayload,
         });
-
-        const full = result.markIssued
-          ? await updateOrder(created.id, {
-              status: "ISSUED",
-              totalAmount,
-              note,
-              services: servicesPayload,
-            })
-          : ((await getOrder(created.id)) ?? created);
+        // POST trả `services` rỗng nên luôn đọc lại chi tiết đầy đủ; xuất hoá đơn
+        // (nếu chọn) là một lần PATCH /:id/status riêng trước khi đọc lại.
+        if (result.markIssued) {
+          await updateOrderStatus(created.id, { status: "ISSUED" });
+        }
+        const full = (await getOrder(created.id)) ?? created;
         setOrders((prev) => [full, ...prev]);
         toast.success(
           result.markIssued
@@ -210,12 +216,11 @@ export function InvoicesPage() {
 
   const handleConfirmCancel = async (reason: string, note: string) => {
     if (!cancellingInvoice) return;
-    const cancelReason = [reason, note.trim()].filter(Boolean).join(" — ");
+    const voidedReason = [reason, note.trim()].filter(Boolean).join(" — ");
     try {
-      const updated = await updateOrder(cancellingInvoice.id, {
+      const updated = await updateOrderStatus(cancellingInvoice.id, {
         status: "VOIDED",
-        cancelReason,
-        services: orderItemsToInput(cancellingInvoice),
+        voidedReason,
       });
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
       toast.success(`Đã huỷ hoá đơn ${updated.code}`);
@@ -228,10 +233,9 @@ export function InvoicesPage() {
   const handleConfirmStatus = async (status: OrderStatus, reason: string) => {
     if (!statusInvoice) return;
     try {
-      const updated = await updateOrder(statusInvoice.id, {
+      const updated = await updateOrderStatus(statusInvoice.id, {
         status,
-        services: orderItemsToInput(statusInvoice),
-        ...(reason ? { cancelReason: reason } : {}),
+        ...(status === "VOIDED" && reason ? { voidedReason: reason } : {}),
       });
       setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
       toast.success(
