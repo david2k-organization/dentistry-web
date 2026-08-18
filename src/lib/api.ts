@@ -26,6 +26,9 @@ export type ListParams = {
   searchKey?: string;
   page?: number;
   pageSize?: number;
+  /** Lọc theo khoảng ngày (ISO). VD /appointments dùng để lấy lịch theo tuần/ngày. */
+  startDate?: string;
+  endDate?: string;
 };
 
 /** Chuẩn hóa query cho endpoint danh sách; bỏ qua field rỗng/không truyền. */
@@ -34,6 +37,8 @@ export function listQuery(params: ListParams = {}): Record<string, string | numb
   if (params.searchKey?.trim()) query.searchKey = params.searchKey.trim();
   if (params.page) query.page = params.page;
   if (params.pageSize) query.pageSize = params.pageSize;
+  if (params.startDate) query.startDate = params.startDate;
+  if (params.endDate) query.endDate = params.endDate;
   return query;
 }
 

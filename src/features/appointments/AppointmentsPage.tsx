@@ -30,6 +30,7 @@ import {
   LEGEND,
   OPEN_HOUR,
   STATUS,
+  WEEK_DAY_COUNT,
   addDays,
   addMinutes,
   buildWeekDays,
@@ -114,24 +115,43 @@ export function AppointmentsPage() {
   const navigate = useNavigate();
   const { newAppt } = routeApi.useSearch();
 
+  // Dữ liệu tham chiếu (bệnh nhân/dịch vụ/bác sĩ) — tải một lần.
   useEffect(() => {
     Promise.all([
       getPatients({ pageSize: 100 }),
       getServices({ pageSize: 100 }),
       getUsers({ roleName: "Bác sĩ", pageSize: 100 }),
-      getAppointments({ pageSize: 200 }),
     ])
-      .then(([patientPage, servicePage, doctorPage, appointmentPage]) => {
-        console.log("appointmentPage.data", appointmentPage.data);
+      .then(([patientPage, servicePage, doctorPage]) => {
         setPatients(patientPage.data);
         setServices(servicePage.data);
         setDoctors(doctorPage.data);
-        setAppts(appointmentPage.data.map(toAppt));
       })
       .catch(() => {
-        toast.error("Không thể tải lịch hẹn.");
+        toast.error("Không thể tải dữ liệu lịch hẹn.");
       });
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const rangeStart = weekStart;
+    const rangeEnd = addDays(weekStart, WEEK_DAY_COUNT - 1);
+    rangeEnd.setHours(23, 59, 59, 999);
+    getAppointments({
+      pageSize: 200,
+      startDate: rangeStart.toISOString(),
+      endDate: rangeEnd.toISOString(),
+    })
+      .then((page) => {
+        if (active) setAppts(page.data.map(toAppt));
+      })
+      .catch(() => {
+        if (active) toast.error("Không thể tải lịch hẹn.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [weekStart]);
 
   const [handledNewAppt, setHandledNewAppt] = useState(false);
   if (newAppt && !handledNewAppt) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Bell, LogOut, Plus, Search, Settings, User } from "lucide-react";
+import { Bell, LogOut, Menu, Plus, Search, Settings, User } from "lucide-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
 
@@ -32,6 +32,7 @@ const TITLES: { match: (path: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/service-categories"), title: "Danh mục dịch vụ" },
   { match: (p) => p.startsWith("/services"), title: "Dịch vụ" },
   { match: (p) => p.startsWith("/invoices"), title: "Hóa đơn" },
+  { match: (p) => p.startsWith("/payments"), title: "Thanh toán" },
   { match: (p) => p.startsWith("/inventory"), title: "Kho vật tư" },
   { match: (p) => p.startsWith("/staff"), title: "Nhân sự" },
   { match: (p) => p.startsWith("/roles"), title: "Vai trò & phân quyền" },
@@ -50,7 +51,7 @@ const todayLabel = new Intl.DateTimeFormat("vi-VN", {
   year: "numeric",
 }).format(new Date());
 
-export function AppHeader() {
+export function AppHeader({ onOpenSidebar }: { onOpenSidebar: () => void }) {
   const navigate = useNavigate();
   const screenTitle = useScreenTitle();
   const [search, setSearch] = useState("");
@@ -122,18 +123,31 @@ export function AppHeader() {
   };
 
   return (
-    <header className="flex h-[62px] shrink-0 items-center gap-4 border-b border-border bg-card px-6">
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-[17px] font-semibold tracking-tight text-foreground">
+    <header className="flex h-[62px] shrink-0 items-center gap-2 border-b border-border bg-card px-4 sm:gap-4 sm:px-6">
+      {/* Nút mở menu — chỉ trên mobile/tablet */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onOpenSidebar}
+        aria-label="Mở menu"
+        className="shrink-0 lg:hidden"
+      >
+        <Menu />
+      </Button>
+
+      <div className="flex min-w-0 items-baseline gap-3">
+        <h1 className="truncate text-[15px] font-semibold tracking-tight text-foreground sm:text-[17px]">
           {screenTitle}
         </h1>
-        <span className="text-[12.5px] capitalize text-muted-foreground">{todayLabel}</span>
+        <span className="hidden text-[12.5px] capitalize text-muted-foreground md:inline">
+          {todayLabel}
+        </span>
       </div>
 
       <div className="flex-1" />
 
-      {/* Ô tìm kiếm */}
-      <div className="flex w-[260px] items-center gap-2.5 rounded-[10px] border border-border bg-muted px-3 py-2">
+      {/* Ô tìm kiếm — ẩn trên màn hình nhỏ */}
+      <div className="hidden w-[180px] items-center gap-2.5 rounded-[10px] border border-border bg-muted px-3 py-2 md:flex lg:w-[240px]">
         <Search className="size-[18px] shrink-0 text-muted-foreground" />
         <input
           value={search}
@@ -143,13 +157,13 @@ export function AppHeader() {
         />
       </div>
 
-      {/* Nút đặt hẹn */}
+      {/* Nút đặt hẹn — thu gọn thành icon trên mobile */}
       <Button
-        className="gap-1.5"
+        className="shrink-0 gap-1.5"
         onClick={() => navigate({ to: "/appointments", search: { newAppt: true } })}
       >
         <Plus data-icon="inline-start" />
-        Đặt hẹn
+        <span className="hidden sm:inline">Đặt hẹn</span>
       </Button>
 
       <Popover>

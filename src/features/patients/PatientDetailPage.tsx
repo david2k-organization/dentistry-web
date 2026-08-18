@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   CalendarPlus,
-  FilePlus2,
   LayoutGrid,
   Pencil,
   Trash2,
@@ -13,10 +12,12 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { createOrder } from "@/features/invoices/api";
 import { BookAppointmentDialog } from "@/features/appointments/BookAppointmentDialog";
 import { getSupplies } from "@/features/inventory/api";
 import type { Supply } from "@/features/inventory/types";
 import { deletePatient, getPatient } from "@/features/patients/api";
+import { CreateInvoiceFromRecordDialog } from "@/features/patients/CreateInvoiceFromRecordDialog";
 import { DeletePatientDialog } from "@/features/patients/DeletePatientDialog";
 import {
   calculateAge,
@@ -24,9 +25,11 @@ import {
   getInitials,
 } from "@/features/patients/format";
 import { getPatientMock, tagBg, tagFg } from "@/features/patients/mock";
+import { PatientAdminInfo } from "@/features/patients/PatientAdminInfo";
 import { PatientFormDialog } from "@/features/patients/PatientFormDialog";
 import { TreatmentDetailDialog } from "@/features/patients/TreatmentDetailDialog";
 import { TreatmentRecordDialog } from "@/features/patients/TreatmentRecordDialog";
+import { TreatmentRecordsCard } from "@/features/patients/TreatmentRecordsCard";
 import type { Patient } from "@/features/patients/types";
 import { getServices } from "@/features/services/api";
 import type { Service } from "@/features/services/types";
@@ -37,8 +40,7 @@ import type { User } from "@/features/users/types";
 
 const routeApi = getRouteApi("/_authenticated/patients/$patientId");
 
-const vnd = new Intl.NumberFormat("vi-VN");
-const dong = (amount: number) => `${vnd.format(amount)}đ`;
+const RECORDS_PAGE_SIZE = 10;
 
 function toMap<T extends { id: string }>(items: T[]): Record<string, T> {
   return Object.fromEntries(items.map((it) => [it.id, it]));
@@ -54,17 +56,28 @@ export function PatientDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
-  const [detailRecord, setDetailRecord] = useState<TreatmentRecord | null>(null);
+  const [detailRecord, setDetailRecord] = useState<TreatmentRecord | null>(
+    null,
+  );
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // Hồ sơ điều trị thật + map để tra tên dịch vụ/bác sĩ/vật tư.
+  const [invoicingRecord, setInvoicingRecord] =
+    useState<TreatmentRecord | null>(null);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+
   const [records, setRecords] = useState<TreatmentRecord[]>([]);
+  const [recordsTotal, setRecordsTotal] = useState(0);
+  const [recordsPage, setRecordsPage] = useState(1);
+  const [loadingRecords, setLoadingRecords] = useState(true);
+  const [loadingMoreRecords, setLoadingMoreRecords] = useState(false);
   const [serviceMap, setServiceMap] = useState<Record<string, Service>>({});
   const [doctorMap, setDoctorMap] = useState<Record<string, User>>({});
   const [supplyMap, setSupplyMap] = useState<Record<string, Supply>>({});
-  // Tăng để nạp lại danh sách hồ sơ sau khi ghi ca mới.
+
   const [reload, setReload] = useState(0);
+
+  const hasMoreRecords = records.length < recordsTotal;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,30 +98,65 @@ export function PatientDetailPage() {
     };
   }, [patientId]);
 
-  // Nạp hồ sơ điều trị của bệnh nhân + dữ liệu tra cứu tên.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getTreatmentRecords({ patientId, pageSize: 100 }),
-      getServices({ pageSize: 100 }),
-      getUsers({ pageSize: 100 }),
-      getSupplies({ pageSize: 100 }),
-    ])
-      .then(([recordPage, servicePage, userPage, supplyPage]) => {
+    Promise.resolve().then(async () => {
+      setLoadingRecords(true);
+      try {
+        const [recordPage, servicePage, userPage, supplyPage] =
+          await Promise.all([
+            getTreatmentRecords({
+              patientId,
+              page: 1,
+              pageSize: RECORDS_PAGE_SIZE,
+            }),
+            getServices({ pageSize: 100 }),
+            getUsers({ pageSize: 100 }),
+            getSupplies({ pageSize: 100 }),
+          ]);
         if (cancelled) return;
-        // Backend đã lọc theo patientId và sắp xếp mới nhất trước.
         setRecords(recordPage.data);
+        setRecordsTotal(recordPage.meta.total);
+        setRecordsPage(1);
         setServiceMap(toMap(servicePage.data));
         setDoctorMap(toMap(userPage.data));
         setSupplyMap(toMap(supplyPage.data));
-      })
-      .catch(() => {
-        if (!cancelled) setRecords([]);
-      });
+      } catch {
+        if (!cancelled) {
+          setRecords([]);
+          setRecordsTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoadingRecords(false);
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, [patientId, reload]);
+
+  // Nạp thêm một trang khi cuộn tới cuối danh sách (infinite load).
+  const loadMoreRecords = useCallback(async () => {
+    setLoadingMoreRecords(true);
+    try {
+      const nextPage = recordsPage + 1;
+      const { data, meta } = await getTreatmentRecords({
+        patientId,
+        page: nextPage,
+        pageSize: RECORDS_PAGE_SIZE,
+      });
+      setRecords((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        return [...prev, ...data.filter((r) => !seen.has(r.id))];
+      });
+      setRecordsTotal(meta.total);
+      setRecordsPage(nextPage);
+    } catch {
+      toast.error("Không tải thêm được hồ sơ điều trị.");
+    } finally {
+      setLoadingMoreRecords(false);
+    }
+  }, [patientId, recordsPage]);
 
   const handleConfirmDelete = async () => {
     if (!patient) return;
@@ -128,14 +176,46 @@ export function PatientDetailPage() {
     }
   };
 
-  const notImplemented = () => toast.info("Tính năng đang được phát triển.");
-
   const serviceOf = (r: TreatmentRecord) => serviceMap[r.serviceId];
   const priceOf = (r: TreatmentRecord) => Number(serviceOf(r)?.price ?? 0);
-  const serviceName = (r: TreatmentRecord) => serviceOf(r)?.name ?? "Dịch vụ điều trị";
-  const doctorName = (r: TreatmentRecord) => doctorMap[r.doctorId]?.fullName ?? "—";
+  const serviceName = (r: TreatmentRecord) =>
+    serviceOf(r)?.name ?? "Dịch vụ điều trị";
+  const doctorName = (r: TreatmentRecord) =>
+    doctorMap[r.doctorId]?.fullName ?? "—";
   const supplyCount = (r: TreatmentRecord) =>
     r.treatmentSupplies?.reduce((sum, s) => sum + s.quantity, 0) ?? 0;
+
+  // Tạo hóa đơn từ 1 ca điều trị: một dòng dịch vụ, số lượng 1, giá theo dịch vụ.
+  const handleCreateInvoice = async () => {
+    if (!invoicingRecord) return;
+    const price = priceOf(invoicingRecord);
+    setCreatingInvoice(true);
+    try {
+      const order = await createOrder({
+        patientId: invoicingRecord.patientId,
+        doctorId: invoicingRecord.doctorId,
+        totalAmount: price,
+        services: [
+          {
+            serviceId: invoicingRecord.serviceId,
+            quantity: 1,
+            unitPrice: price,
+            amount: price,
+          },
+        ],
+      });
+      toast.success(`Đã tạo hóa đơn ${order.code}`);
+      setInvoicingRecord(null);
+    } catch (err) {
+      const message =
+        err instanceof AxiosError
+          ? (err.response?.data?.message ?? "Không thể tạo hóa đơn.")
+          : "Không thể tạo hóa đơn.";
+      toast.error(message);
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
 
   const mock = patient ? getPatientMock(patient.id) : null;
   const lastVisit = records[0] ?? null;
@@ -162,8 +242,8 @@ export function PatientDetailPage() {
 
       {patient && mock && (
         <>
-          <div className="flex flex-wrap items-center gap-4 rounded-[14px] border border-border bg-card p-[22px]">
-            <div className="size-[58px] shrink-0 overflow-hidden rounded-full bg-accent">
+          <div className="flex flex-wrap items-center gap-4 rounded-[14px] border border-border bg-card p-5.5">
+            <div className="size-14.5 shrink-0 overflow-hidden rounded-full bg-accent">
               {(patient.avatar ?? mock.avatar) ? (
                 <img
                   src={(patient.avatar ?? mock.avatar) as string}
@@ -205,7 +285,18 @@ export function PatientDetailPage() {
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2.5">
-              <Button className="gap-1.5" onClick={notImplemented}>
+              <Button
+                className="gap-1.5"
+                onClick={() =>
+                  navigate({
+                    to: "/tooth-chart",
+                    search: {
+                      patientId: patient.id,
+                      patientName: patient.fullName,
+                    },
+                  })
+                }
+              >
                 <LayoutGrid className="size-4" />
                 Sơ đồ răng
               </Button>
@@ -238,99 +329,36 @@ export function PatientDetailPage() {
           </div>
 
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-            <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-              <div className="border-b border-[#e6efee] px-4.5 py-3.75 text-[14.5px] font-semibold text-foreground">
-                Thông tin hành chính
-              </div>
-              <div className="px-4.5">
-                <DetailField label="Mã hồ sơ" value={mock.code} />
-                <DetailField label="Bác sĩ phụ trách" value={mock.doctor} />
-                <DetailField label="Điện thoại" value={patient.phone ?? "—"} />
-                <DetailField
-                  label="Lần khám gần nhất"
-                  value={
-                    lastVisit
-                      ? `${format(new Date(lastVisit.createdAt), "dd/MM/yyyy")} — ${serviceName(lastVisit)}`
-                      : "—"
-                  }
-                />
-                <DetailField label="Địa chỉ" value={mock.address} />
-                <DetailField
-                  label="Tiền sử dị ứng"
-                  value={mock.allergy}
-                  valueColor={
-                    mock.allergy === "Không ghi nhận" ? undefined : "#a4553a"
-                  }
-                />
-                <DetailField
-                  label="Ghi chú lâm sàng"
-                  value={patient.notes ?? "—"}
-                  last
-                />
-              </div>
-            </div>
+            <PatientAdminInfo
+              code={mock.code}
+              doctor={mock.doctor}
+              phone={patient.phone ?? "—"}
+              lastVisit={
+                lastVisit
+                  ? `${format(new Date(lastVisit.createdAt), "dd/MM/yyyy")} — ${serviceName(lastVisit)}`
+                  : "—"
+              }
+              address={mock.address}
+              allergy={mock.allergy}
+              notes={patient.notes ?? "—"}
+            />
 
             <div className="flex flex-col gap-4">
-              <div className="overflow-hidden rounded-[14px] border border-border bg-card">
-                <div className="flex items-center gap-2.5 border-b border-[#e6efee] px-[18px] py-[15px]">
-                  <div className="text-[14.5px] font-semibold text-foreground">
-                    Hồ sơ điều trị
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {records.length} ca
-                  </div>
-                  <div className="flex-1" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => setRecordOpen(true)}
-                  >
-                    <FilePlus2 className="size-4" />
-                    Ghi hồ sơ
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-2.5 px-[18px] py-3.5">
-                  {records.length === 0 && (
-                    <div className="text-[12.5px] text-muted-foreground">
-                      Chưa có ca điều trị nào.
-                    </div>
-                  )}
-                  {records.map((r) => (
-                    <div
-                      key={r.id}
-                      className="rounded-xl border border-[#eef4f3] p-3.5"
-                    >
-                      <div className="flex gap-3.5">
-                        <div className="w-[68px] shrink-0 pt-0.5 text-[12.5px] tabular-nums text-muted-foreground">
-                          {format(new Date(r.createdAt), "dd/MM/yyyy")}
-                        </div>
-                        <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#3f7a55]" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start gap-2.5">
-                            <div className="min-w-0 flex-1 text-[13.5px] font-medium text-foreground">
-                              {serviceName(r)}
-                            </div>
-                            <div className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground">
-                              {dong(priceOf(r))}
-                            </div>
-                          </div>
-                          <div className="mt-1.5 text-[12px] text-muted-foreground">
-                            {doctorName(r)} · {supplyCount(r)} vật tư
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setDetailRecord(r)}
-                            className="mt-2.5 cursor-pointer rounded-lg border border-[#cfe0df] bg-card px-3 py-1 text-[12px] font-medium text-primary hover:bg-accent"
-                          >
-                            Xem chi tiết
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <TreatmentRecordsCard
+                records={records}
+                total={recordsTotal}
+                loading={loadingRecords}
+                loadingMore={loadingMoreRecords}
+                hasMore={hasMoreRecords}
+                onLoadMore={loadMoreRecords}
+                serviceName={serviceName}
+                price={priceOf}
+                doctorName={doctorName}
+                supplyCount={supplyCount}
+                onAddRecord={() => setRecordOpen(true)}
+                onViewDetail={setDetailRecord}
+                onCreateInvoice={setInvoicingRecord}
+              />
             </div>
           </div>
         </>
@@ -381,34 +409,17 @@ export function PatientDetailPage() {
         onConfirm={handleConfirmDelete}
         deleting={deleting}
       />
-    </div>
-  );
-}
 
-function DetailField({
-  label,
-  value,
-  valueColor,
-  last,
-}: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  last?: boolean;
-}) {
-  return (
-    <div
-      className={`flex gap-3.5 py-3 ${last ? "" : "border-b border-[#f2f7f6]"}`}
-    >
-      <div className="w-[136px] shrink-0 text-[12.5px] text-muted-foreground">
-        {label}
-      </div>
-      <div
-        className="flex-1 text-[13px] font-medium whitespace-pre-wrap text-foreground"
-        style={{ color: valueColor }}
-      >
-        {value}
-      </div>
+      <CreateInvoiceFromRecordDialog
+        open={!!invoicingRecord}
+        onOpenChange={(open) => !open && setInvoicingRecord(null)}
+        serviceName={invoicingRecord ? serviceName(invoicingRecord) : ""}
+        doctorName={invoicingRecord ? doctorName(invoicingRecord) : ""}
+        patientName={patient?.fullName ?? ""}
+        amount={invoicingRecord ? priceOf(invoicingRecord) : 0}
+        creating={creatingInvoice}
+        onConfirm={handleCreateInvoice}
+      />
     </div>
   );
 }

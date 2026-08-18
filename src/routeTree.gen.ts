@@ -20,6 +20,7 @@ import { Route as AuthenticatedServicesIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedServiceCategoriesIndexRouteImport } from './routes/_authenticated/service-categories/index'
 import { Route as AuthenticatedRolesIndexRouteImport } from './routes/_authenticated/roles/index'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports/index'
+import { Route as AuthenticatedPaymentsIndexRouteImport } from './routes/_authenticated/payments/index'
 import { Route as AuthenticatedPatientsIndexRouteImport } from './routes/_authenticated/patients/index'
 import { Route as AuthenticatedInvoicesIndexRouteImport } from './routes/_authenticated/invoices/index'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index'
@@ -85,6 +86,12 @@ const AuthenticatedReportsIndexRoute =
     path: '/reports/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedPaymentsIndexRoute =
+  AuthenticatedPaymentsIndexRouteImport.update({
+    id: '/payments/',
+    path: '/payments/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedPatientsIndexRoute =
   AuthenticatedPatientsIndexRouteImport.update({
     id: '/patients/',
@@ -132,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/patients/': typeof AuthenticatedPatientsIndexRoute
+  '/payments/': typeof AuthenticatedPaymentsIndexRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
   '/roles/': typeof AuthenticatedRolesIndexRoute
   '/service-categories/': typeof AuthenticatedServiceCategoriesIndexRoute
@@ -150,6 +158,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof AuthenticatedInventoryIndexRoute
   '/invoices': typeof AuthenticatedInvoicesIndexRoute
   '/patients': typeof AuthenticatedPatientsIndexRoute
+  '/payments': typeof AuthenticatedPaymentsIndexRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
   '/roles': typeof AuthenticatedRolesIndexRoute
   '/service-categories': typeof AuthenticatedServiceCategoriesIndexRoute
@@ -170,6 +179,7 @@ export interface FileRoutesById {
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/_authenticated/invoices/': typeof AuthenticatedInvoicesIndexRoute
   '/_authenticated/patients/': typeof AuthenticatedPatientsIndexRoute
+  '/_authenticated/payments/': typeof AuthenticatedPaymentsIndexRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
   '/_authenticated/roles/': typeof AuthenticatedRolesIndexRoute
   '/_authenticated/service-categories/': typeof AuthenticatedServiceCategoriesIndexRoute
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
     | '/inventory/'
     | '/invoices/'
     | '/patients/'
+    | '/payments/'
     | '/reports/'
     | '/roles/'
     | '/service-categories/'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/invoices'
     | '/patients'
+    | '/payments'
     | '/reports'
     | '/roles'
     | '/service-categories'
@@ -227,6 +239,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/'
     | '/_authenticated/invoices/'
     | '/_authenticated/patients/'
+    | '/_authenticated/payments/'
     | '/_authenticated/reports/'
     | '/_authenticated/roles/'
     | '/_authenticated/service-categories/'
@@ -321,6 +334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/payments/': {
+      id: '/_authenticated/payments/'
+      path: '/payments'
+      fullPath: '/payments/'
+      preLoaderRoute: typeof AuthenticatedPaymentsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/patients/': {
       id: '/_authenticated/patients/'
       path: '/patients'
@@ -374,6 +394,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
   AuthenticatedInvoicesIndexRoute: typeof AuthenticatedInvoicesIndexRoute
   AuthenticatedPatientsIndexRoute: typeof AuthenticatedPatientsIndexRoute
+  AuthenticatedPaymentsIndexRoute: typeof AuthenticatedPaymentsIndexRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
   AuthenticatedRolesIndexRoute: typeof AuthenticatedRolesIndexRoute
   AuthenticatedServiceCategoriesIndexRoute: typeof AuthenticatedServiceCategoriesIndexRoute
@@ -390,6 +411,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
   AuthenticatedInvoicesIndexRoute: AuthenticatedInvoicesIndexRoute,
   AuthenticatedPatientsIndexRoute: AuthenticatedPatientsIndexRoute,
+  AuthenticatedPaymentsIndexRoute: AuthenticatedPaymentsIndexRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
   AuthenticatedRolesIndexRoute: AuthenticatedRolesIndexRoute,
   AuthenticatedServiceCategoriesIndexRoute:

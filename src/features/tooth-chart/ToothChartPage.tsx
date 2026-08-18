@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getRouteApi } from "@tanstack/react-router";
 import { AxiosError } from "axios";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -57,6 +58,8 @@ const toothNames: Record<number, string> = {
   8: "Răng khôn",
 };
 const toothName = (num: number) => toothNames[num % 10] ?? "Răng";
+
+const routeApi = getRouteApi("/_authenticated/tooth-chart/");
 
 function ToothButton({
   num,
@@ -155,9 +158,11 @@ export function ToothChartPage() {
       });
   };
 
-  const handleSelectPatient = async (id: string) => {
+  const handleSelectPatient = async (id: string, name?: string) => {
     setSelectedPatientId(id);
-    setSelectedPatientName(patients.find((p) => p.id === id)?.fullName ?? "");
+    setSelectedPatientName(
+      name ?? patients.find((p) => p.id === id)?.fullName ?? "",
+    );
     setSelectedTooth(null);
     setHistory([]);
     setTeeth([]);
@@ -189,6 +194,17 @@ export function ToothChartPage() {
       if (seq === chartSeq.current) setChartLoading(false);
     }
   };
+
+  // Preselect bệnh nhân khi điều hướng kèm ?patientId (vd từ trang chi tiết BN).
+  const search = routeApi.useSearch();
+  const preselectedRef = useRef(false);
+  useEffect(() => {
+    if (preselectedRef.current || !search.patientId) return;
+    preselectedRef.current = true;
+    const { patientId, patientName } = search;
+    Promise.resolve().then(() => handleSelectPatient(patientId, patientName));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.patientId, search.patientName]);
 
   const handleSelectTooth = (num: number) => {
     setSelectedTooth(num);

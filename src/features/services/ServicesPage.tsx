@@ -139,14 +139,14 @@ export function ServicesPage() {
           },
         }}
         actions={
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm theo tên dịch vụ"
-                className="h-9 w-56 pl-8"
+                className="h-9 w-full pl-8 sm:w-56"
               />
             </div>
             <Button

@@ -139,7 +139,7 @@ export function DataTable<TData>({
   return (
     <div className="overflow-hidden rounded-[14px] border border-border bg-card">
       {(title || actions) && (
-        <div className="flex items-center gap-3 border-b border-[#e6efee] px-[18px] py-[15px]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-[#e6efee] px-[18px] py-[15px]">
           {title && (
             <div className="text-[14.5px] font-semibold text-foreground">
               {title}
@@ -150,7 +150,7 @@ export function DataTable<TData>({
               {countLabel(total)}
             </div>
           )}
-          <div className="flex-1" />
+          <div className="hidden flex-1 sm:block" />
           {actions}
         </div>
       )}

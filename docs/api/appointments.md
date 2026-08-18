@@ -1,201 +1,214 @@
 # Appointments API
 
-Quản lý lịch hẹn khám (appointment) của phòng khám: đặt lịch, xem danh sách, xem chi tiết, cập nhật, xoá.
+Quản lý lịch hẹn khám: tạo, xem, danh sách, sửa (bao gồm đổi trạng thái) và xóa.
 
-- **Base URL**: `http://localhost:3000/api/v1` (global prefix `api/v1`, cổng mặc định `3000`)
-- **Resource path**: `/appointments`
-- **Content-Type**: `application/json`
-- **Validation**: `nestjs-zod` `ZodValidationPipe` toàn cục — body/query sai schema trả về `400` qua `ZodExceptionFilter`.
+- **Base URL:** `/api/v1`
+- **Auth:** Bearer token (header `Authorization: Bearer <access_token>`).
+- **Phân quyền:** mỗi endpoint gắn một permission key.
 
-## Model
+| Method | Path                  | Permission key         | Mô tả                                   |
+| ------ | --------------------- | ---------------------- | --------------------------------------- |
+| POST   | `/appointments`       | `appointment.create`   | Tạo lịch hẹn (mặc định `SCHEDULED`)     |
+| GET    | `/appointments`       | `appointment.list`     | Danh sách lịch hẹn (phân trang + lọc)   |
+| GET    | `/appointments/:id`   | `appointment.read`     | Chi tiết một lịch hẹn                   |
+| PUT    | `/appointments/:id`   | `appointment.update`   | Sửa thông tin / đổi trạng thái          |
+| DELETE | `/appointments/:id`   | `appointment.delete`   | Xóa lịch hẹn (**xóa cứng**)             |
 
-Bảng `appointments` (Prisma model `Appointment`).
+> Mọi response JSON đều được bọc trong envelope chuẩn:
+> ```json
+> {
+>   "success": true,
+>   "statusCode": 200,
+>   "message": "Success",
+>   "data": <payload>,
+>   "timestamp": "2026-08-18T03:00:00.000Z",
+>   "path": "/api/v1/appointments"
+> }
+> ```
 
-| Field           | Kiểu                | Bắt buộc | Ghi chú                                                            |
-| --------------- | ------------------- | -------- | ----------------------------------------------------------------- |
-| `id`            | `string` (cuid)     | auto     | Khoá chính, sinh tự động.                                         |
-| `patientId`     | `string`            | ✅       | FK → `patients.id`.                                               |
-| `doctorId`      | `string`            | ✅       | FK → `users.id` (bác sĩ).                                         |
-| `serviceId`     | `string`            | ✅       | FK → `services.id`.                                              |
-| `appointmentAt` | `Date` (ISO 8601)   | ✅       | Thời điểm hẹn. Được coerce từ chuỗi ISO.                          |
-| `duration`      | `int` (phút)        | ✅       | ≥ 1. Mặc định DB là `10`.                                         |
-| `notes`         | `string`            | ❌       | Ghi chú.                                                          |
-| `status`        | `AppointmentStatus` | auto     | Mặc định `SCHEDULED`. Chỉ đặt được qua **update**, không qua create. |
-| `createdAt`     | `Date`              | auto     |                                                                   |
-| `updatedAt`     | `Date`              | auto     |                                                                   |
-| `deletedAt`     | `Date \| null`      | auto     | Dùng cho lọc `deletedAt: null` khi list.                          |
+## Trạng thái lịch hẹn (`AppointmentStatus`)
 
-### Enum `AppointmentStatus`
+| Giá trị        | Ý nghĩa                    |
+| -------------- | -------------------------- |
+| `SCHEDULED`    | Đã đặt, chờ đến khám (mặc định khi tạo) |
+| `ARRIVED`      | Bệnh nhân đã đến           |
+| `IN_PROGRESS`  | Đang điều trị              |
+| `COMPLETED`    | Đã hoàn thành              |
+| `CANCELLED`    | Đã hủy                     |
 
-`SCHEDULED` · `ARRIVED` · `IN_PROGRESS` · `CANCELLED` · `COMPLETED`
+> Lịch hẹn `SCHEDULED` sắp đến giờ sẽ được cron tự gửi thông báo nhắc hẹn (một lần, đánh dấu `reminderSentAt`).
 
-Mọi response đều kèm quan hệ rút gọn:
+## Đối tượng `Appointment`
 
-```json
+```jsonc
 {
-  "patient": { "fullName": "..." },
-  "doctor":  { "fullName": "..." },
-  "service": { "name": "...", "code": "..." }
-}
-```
-
----
-
-## Endpoints
-
-### 1. Tạo lịch hẹn
-
-```
-POST /api/v1/appointments
-```
-
-**Body** (`CreateAppointmentDto`) — chỉ nhận các field sau; `status` **không** được set khi tạo (luôn là `SCHEDULED`):
-
-```json
-{
-  "patientId": "clv0patient123",
-  "doctorId": "clv0doctor456",
-  "serviceId": "clv0service789",
-  "appointmentAt": "2026-08-10T09:30:00.000Z",
-  "duration": 30,
-  "notes": "Khám tổng quát lần đầu"
-}
-```
-
-| Field           | Ràng buộc                         |
-| --------------- | --------------------------------- |
-| `patientId`     | string, bắt buộc                  |
-| `doctorId`      | string, bắt buộc                  |
-| `serviceId`     | string, bắt buộc                  |
-| `appointmentAt` | date ISO, bắt buộc                |
-| `duration`      | integer ≥ 1, bắt buộc             |
-| `notes`         | string, tùy chọn                  |
-
-**201 Created**
-
-```json
-{
-  "id": "clv0appt001",
-  "patientId": "clv0patient123",
-  "doctorId": "clv0doctor456",
-  "serviceId": "clv0service789",
-  "appointmentAt": "2026-08-10T09:30:00.000Z",
-  "duration": 30,
-  "notes": "Khám tổng quát lần đầu",
+  "id": "clx_appt_1",
+  "patientId": "clx_patient_1",
+  "doctorId": "clx_doctor_1",
+  "serviceId": "clx_service_1",
+  "appointmentAt": "2026-08-20T02:30:00.000Z",
+  "duration": 30,                       // phút
+  "notes": "Tái khám niềng",
   "status": "SCHEDULED",
-  "createdAt": "2026-08-05T02:10:00.000Z",
-  "updatedAt": "2026-08-05T02:10:00.000Z",
+  "reminderSentAt": null,
+  "createdAt": "2026-08-18T03:00:00.000Z",
+  "updatedAt": "2026-08-18T03:00:00.000Z",
   "deletedAt": null,
   "patient": { "fullName": "Nguyễn Văn A" },
-  "doctor":  { "fullName": "BS. Trần Thị B" },
-  "service": { "name": "Khám tổng quát", "code": "KTQ" }
+  "doctor":  { "fullName": "BS. Trần B" },
+  "service": { "name": "Niềng răng", "code": "SV010" }
 }
 ```
 
+Các endpoint create / detail / update / list đều trả kèm quan hệ `patient`, `doctor`, `service` (rút gọn như trên).
+
 ---
 
-### 2. Danh sách lịch hẹn (phân trang + lọc)
+## 1. Tạo lịch hẹn — `POST /appointments`
 
+Lịch hẹn mới luôn khởi tạo ở trạng thái `SCHEDULED` (không nhận `status` khi tạo).
+
+**Body**
+
+| Trường          | Kiểu             | Bắt buộc | Mô tả                                      |
+| --------------- | ---------------- | -------- | ------------------------------------------ |
+| `patientId`     | string           | ✅       | ID bệnh nhân                               |
+| `doctorId`      | string           | ✅       | ID bác sĩ                                  |
+| `serviceId`     | string           | ✅       | ID dịch vụ                                 |
+| `appointmentAt` | string (ISO date)| ✅       | Thời điểm hẹn khám                         |
+| `duration`      | number           | ✅       | Thời lượng (phút), số nguyên ≥ 1           |
+| `notes`         | string           | ❌       | Ghi chú                                    |
+
+```http
+POST /api/v1/appointments
+Authorization: Bearer <access_token>
+Content-Type: application/json
 ```
-GET /api/v1/appointments
-```
-
-**Query** (`QueryAppointmentsDto`):
-
-| Param       | Kiểu   | Mặc định | Ghi chú                                                        |
-| ----------- | ------ | -------- | -------------------------------------------------------------- |
-| `page`      | number | `1`      | Trang (từ `QueryPaginationSchema`, coerce số).                 |
-| `pageSize`  | number | `10`     | Số bản ghi/trang.                                              |
-| `searchKey` | string | —        | Tìm theo `name` (`contains`, không phân biệt hoa thường).      |
-| `startDate` | date   | —        | Lọc `createdAt >= startDate`.                                  |
-| `endDate`   | date   | —        | Lọc `createdAt <= endDate`.                                    |
-
-Ví dụ:
-
-```
-GET /api/v1/appointments?page=1&pageSize=20&startDate=2026-08-01&endDate=2026-08-31
-```
-
-**200 OK** — trả về mảng, sắp xếp `updatedAt desc`:
-
 ```json
-[
-  {
-    "id": "clv0appt001",
-    "appointmentAt": "2026-08-10T09:30:00.000Z",
-    "duration": 30,
-    "status": "SCHEDULED",
-    "patient": { "fullName": "Nguyễn Văn A" },
-    "doctor":  { "fullName": "BS. Trần Thị B" },
-    "service": { "name": "Khám tổng quát", "code": "KTQ" }
-  }
-]
+{
+  "patientId": "clx_patient_1",
+  "doctorId": "clx_doctor_1",
+  "serviceId": "clx_service_1",
+  "appointmentAt": "2026-08-20T02:30:00.000Z",
+  "duration": 30,
+  "notes": "Tái khám niềng"
+}
 ```
 
-> Lưu ý: `findAll` hiện trả về **mảng** trực tiếp (chưa bọc `{ data, meta }` như một số module CRUD khác).
+**Response `201 Created`** — lịch hẹn vừa tạo (kèm `patient`, `doctor`, `service`).
 
 ---
 
-### 3. Chi tiết lịch hẹn
+## 2. Danh sách — `GET /appointments`
 
+Trả về các lịch hẹn **chưa xóa** (`deletedAt = null`), sắp xếp `updatedAt` giảm dần.
+
+**Query params**
+
+| Param       | Kiểu             | Bắt buộc | Mặc định | Mô tả                                                   |
+| ----------- | ---------------- | -------- | -------- | ------------------------------------------------------- |
+| `page`      | number           | ❌       | 1        | Trang                                                   |
+| `pageSize`  | number           | ❌       | 10       | Số dòng/trang (1–200)                                   |
+| `searchKey` | string           | ❌       | —        | Tìm theo **tên bệnh nhân** hoặc **tên dịch vụ** (chứa, không phân biệt hoa thường) |
+| `status`    | enum             | ❌       | —        | Lọc theo trạng thái: `SCHEDULED` \| `ARRIVED` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED` |
+| `startDate` | date             | ❌       | —        | `createdAt >= startDate`                                |
+| `endDate`   | date             | ❌       | —        | `createdAt <= endDate`                                  |
+
+```http
+GET /api/v1/appointments?page=1&pageSize=20&searchKey=Nguyễn
+Authorization: Bearer <access_token>
 ```
-GET /api/v1/appointments/:id
-```
 
-**200 OK** — object lịch hẹn kèm quan hệ (như phần Model). Không tìm thấy → `null`.
-
----
-
-### 4. Cập nhật lịch hẹn
-
-```
-PUT /api/v1/appointments/:id
-```
-
-**Body** (`UpdateAppointmentDto`) — tất cả field của create ở dạng **tùy chọn**, cộng thêm `status`:
+**Response `200 OK`** — dạng phân trang:
 
 ```json
 {
-  "appointmentAt": "2026-08-11T14:00:00.000Z",
-  "duration": 45,
-  "status": "ARRIVED"
+  "success": true,
+  "statusCode": 200,
+  "message": "Success",
+  "data": [
+    {
+      "id": "clx_appt_1",
+      "appointmentAt": "2026-08-20T02:30:00.000Z",
+      "status": "SCHEDULED",
+      "patient": { "fullName": "Nguyễn Văn A" },
+      "doctor":  { "fullName": "BS. Trần B" },
+      "service": { "name": "Niềng răng", "code": "SV010" }
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 20, "total": 42, "totalPages": 3 },
+  "timestamp": "2026-08-18T03:00:00.000Z",
+  "path": "/api/v1/appointments"
 }
 ```
 
-| Field                                             | Ràng buộc                    |
-| ------------------------------------------------- | ---------------------------- |
-| `patientId`, `doctorId`, `serviceId`              | string, tùy chọn             |
-| `appointmentAt`                                   | date ISO, tùy chọn           |
-| `duration`                                        | integer ≥ 1, tùy chọn        |
-| `notes`                                           | string, tùy chọn             |
-| `status`                                          | `AppointmentStatus`, tùy chọn |
+---
 
-**200 OK** — object đã cập nhật (kèm quan hệ). ID không tồn tại → lỗi Prisma `P2025` được `PrismaExceptionFilter` map sang `404`.
+## 3. Chi tiết — `GET /appointments/:id`
+
+```http
+GET /api/v1/appointments/clx_appt_1
+Authorization: Bearer <access_token>
+```
+
+**Response `200 OK`** — `data` là lịch hẹn (hoặc `null` nếu không tồn tại). Không lọc `deletedAt`, nên có thể trả về cả bản ghi đã đánh dấu xóa mềm.
 
 ---
 
-### 5. Xoá lịch hẹn
+## 4. Sửa / Đổi trạng thái — `PUT /appointments/:id`
 
+Sửa thông tin lịch hẹn và/hoặc đổi `status`. Tất cả trường đều **optional** — chỉ gửi trường cần đổi.
+
+**Body**
+
+| Trường          | Kiểu              | Mô tả                                                        |
+| --------------- | ----------------- | ----------------------------------------------------------- |
+| `patientId`     | string            | Đổi bệnh nhân                                                |
+| `doctorId`      | string            | Đổi bác sĩ                                                   |
+| `serviceId`     | string            | Đổi dịch vụ                                                  |
+| `appointmentAt` | string (ISO date) | Đổi thời điểm hẹn                                            |
+| `duration`      | number            | Đổi thời lượng (phút, ≥ 1)                                   |
+| `notes`         | string            | Đổi ghi chú                                                  |
+| `status`        | enum              | `SCHEDULED` \| `ARRIVED` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED` |
+
+```http
+PUT /api/v1/appointments/clx_appt_1
+Authorization: Bearer <access_token>
+Content-Type: application/json
 ```
-DELETE /api/v1/appointments/:id
+```json
+{ "status": "ARRIVED" }
 ```
 
-Xoá cứng (hard delete — `prisma.appointment.delete`).
-
-**200 OK** — không có body. ID không tồn tại → `404` (qua `PrismaExceptionFilter`).
+**Response `200 OK`** — lịch hẹn sau khi cập nhật.
 
 ---
 
-## Mã lỗi
+## 5. Xóa — `DELETE /appointments/:id`
 
-| HTTP | Khi nào                                                                 |
-| ---- | ---------------------------------------------------------------------- |
-| 400  | Body/query không hợp lệ theo Zod (`ZodExceptionFilter`).               |
-| 404  | Cập nhật/xoá `id` không tồn tại (Prisma `P2025`).                      |
-| 500  | Lỗi không xác định khác.                                               |
+**Xóa cứng** bản ghi khỏi DB (không phải xóa mềm, dù model có cột `deletedAt`).
 
-## Ghi chú triển khai
+```http
+DELETE /api/v1/appointments/clx_appt_1
+Authorization: Bearer <access_token>
+```
 
-- Route đăng ký ở `AppointmentsController` (`@Controller('appointments')`), qua tầng service → repository (`appointments.service.ts` → `appointments.repository.ts`).
-- Repository dùng `Prisma.AppointmentUncheckedCreateInput/UncheckedUpdateInput` để nhận FK vô hướng (`patientId`, `doctorId`, `serviceId`) trực tiếp.
-- Chưa có guard/permission gắn trên controller ở thời điểm hiện tại — mọi endpoint đang mở (cần bổ sung auth guard trước khi lên production).
+**Response `200 OK`** — `data` là `null`.
+
+---
+
+## Mã lỗi chung
+
+| HTTP | Trường hợp                                    |
+| ---- | --------------------------------------------- |
+| 400  | Body/Query sai schema (Zod validation)        |
+| 401  | Thiếu / sai token                             |
+| 403  | Không có permission key tương ứng             |
+| 404  | Không tìm thấy lịch hẹn khi `PUT`/`DELETE` (Prisma `P2025`) |
+
+## Ghi chú tích hợp
+
+- Các permission `appointment.create`, `appointment.list`, `appointment.read`, `appointment.update`, `appointment.delete` được **tự đồng bộ** khi khởi động app (với `SYNC_PERMISSIONS=true`); nhớ **gán quyền cho role** phù hợp.
+- `appointmentAt`, `createdAt`, `updatedAt` trả về dạng chuỗi ISO 8601 (UTC).
+- `startDate` / `endDate` lọc theo `createdAt` (thời điểm **tạo** lịch), không phải `appointmentAt` (thời điểm hẹn khám).
+- `DELETE` là **xóa cứng**; `GET /:id` **không** lọc `deletedAt` nên có thể trả về bản ghi đã xóa mềm (nếu có).

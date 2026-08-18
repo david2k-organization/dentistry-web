@@ -8,18 +8,25 @@ import {
 } from "@/lib/api";
 import type {
   Appointment,
+  AppointmentStatus,
   CreateAppointmentInput,
   UpdateAppointmentInput,
 } from "./types";
 
-// findAll trả về mảng thuần (chưa bọc { data, meta }); normalizePaginated lo cả hai kiểu.
+/** Query cho danh sách lịch hẹn: kế thừa ListParams + lọc theo trạng thái. */
+export type AppointmentListParams = ListParams & {
+  status?: AppointmentStatus;
+};
+
 export async function getAppointments(
-  params: ListParams = {},
+  params: AppointmentListParams = {},
 ): Promise<Paginated<Appointment>> {
-  const res = await api.get<ApiEnvelope<Paginated<Appointment> | Appointment[]>>(
-    "/appointments",
-    { params: listQuery(params) },
-  );
+  const { status, ...listParams } = params;
+  const query = listQuery(listParams);
+  if (status) query.status = status;
+  const res = await api.get<
+    ApiEnvelope<Paginated<Appointment> | Appointment[]>
+  >("/appointments", { params: query });
   return normalizePaginated(res.data);
 }
 
@@ -48,7 +55,6 @@ export async function updateAppointment(
   return res.data.data;
 }
 
-// DELETE là xoá cứng (hard delete) phía backend.
 export async function deleteAppointment(id: string): Promise<void> {
   await api.delete(`/appointments/${id}`);
 }
