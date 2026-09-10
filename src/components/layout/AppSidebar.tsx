@@ -95,7 +95,7 @@ export function AppSidebar({
           </div>
           <div className={cn("min-w-0 leading-tight", collapsed && "lg:hidden")}>
             <div className="truncate text-[14.5px] font-semibold tracking-tight text-foreground">
-              Nha Khoa Pasteur
+              Nha Khoa Trần Định
             </div>
             <div className="truncate text-[11.5px] text-muted-foreground">
               Quản lý phòng khám

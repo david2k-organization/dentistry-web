@@ -43,7 +43,7 @@ export function TreatmentRecordsCard({
   onCreateInvoice,
 }: TreatmentRecordsCardProps) {
   return (
-    <div className="overflow-hidden rounded-[14px] border border-border bg-card">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-border bg-card">
       <div className="flex items-center gap-2.5 border-b border-[#e6efee] px-[18px] py-[15px]">
         <div className="text-[14.5px] font-semibold text-foreground">
           Hồ sơ điều trị
@@ -61,7 +61,7 @@ export function TreatmentRecordsCard({
         </Button>
       </div>
       <InfiniteScroll
-        className="flex max-h-[560px] flex-col gap-2.5 px-[18px] py-3.5"
+        className="flex min-h-0 flex-1 flex-col gap-2.5 px-[18px] py-3.5"
         onLoadMore={onLoadMore}
         hasMore={hasMore}
         loading={loadingMore}

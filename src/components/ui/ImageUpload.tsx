@@ -1,5 +1,12 @@
 import { useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Eye, ImagePlus, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  ImagePlus,
+  Loader2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +24,11 @@ export type ImageUploadProps = {
   maxSizeMB?: number;
   disabled?: boolean;
   className?: string;
+  /**
+   * Nếu truyền, mỗi ảnh chọn sẽ được upload ngay qua hàm này và lưu URL trả về
+   * (thay vì nhúng base64 data URL). Dùng cho luồng presigned URL lên S3.
+   */
+  uploadFile?: (file: File) => Promise<string>;
 };
 
 function readAsDataURL(file: File): Promise<string> {
@@ -38,12 +50,14 @@ export function ImageUpload({
   maxSizeMB = 5,
   disabled,
   className,
+  uploadFile,
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const remaining = max - value.length;
-  const canAdd = !disabled && remaining > 0;
+  const canAdd = !disabled && !uploading && remaining > 0;
 
   const handlePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -69,10 +83,22 @@ export function ImageUpload({
       toast.error(`Chỉ có thể tải lên tối đa ${max} ảnh.`);
     }
 
+    const toAdd = accepted.slice(0, remaining);
+    if (uploadFile) {
+      setUploading(true);
+      try {
+        const urls = await Promise.all(toAdd.map(uploadFile));
+        onChange([...value, ...urls]);
+      } catch {
+        toast.error("Không thể tải ảnh lên.");
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
     try {
-      const urls = await Promise.all(
-        accepted.slice(0, remaining).map(readAsDataURL),
-      );
+      const urls = await Promise.all(toAdd.map(readAsDataURL));
       onChange([...value, ...urls]);
     } catch {
       toast.error("Không thể đọc ảnh.");
@@ -141,6 +167,13 @@ export function ImageUpload({
             <ImagePlus className="size-5" />
             <span className="text-[12px]">Tải ảnh</span>
           </button>
+        )}
+
+        {uploading && (
+          <div className="flex size-24 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-input text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+            <span className="text-[12px]">Đang tải…</span>
+          </div>
         )}
       </div>
 

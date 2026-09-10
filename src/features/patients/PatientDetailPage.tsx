@@ -221,7 +221,7 @@ export function PatientDetailPage() {
   const lastVisit = records[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <Button
         variant="ghost"
         size="sm"
@@ -328,22 +328,24 @@ export function PatientDetailPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-            <PatientAdminInfo
-              code={mock.code}
-              doctor={mock.doctor}
-              phone={patient.phone ?? "—"}
-              lastVisit={
-                lastVisit
-                  ? `${format(new Date(lastVisit.createdAt), "dd/MM/yyyy")} — ${serviceName(lastVisit)}`
-                  : "—"
-              }
-              address={mock.address}
-              allergy={mock.allergy}
-              notes={patient.notes ?? "—"}
-            />
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="self-start">
+              <PatientAdminInfo
+                code={mock.code}
+                doctor={mock.doctor}
+                phone={patient.phone ?? "—"}
+                lastVisit={
+                  lastVisit
+                    ? `${format(new Date(lastVisit.createdAt), "dd/MM/yyyy")} — ${serviceName(lastVisit)}`
+                    : "—"
+                }
+                address={mock.address}
+                allergy={mock.allergy}
+                notes={patient.notes ?? "—"}
+              />
+            </div>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex min-h-0 flex-col gap-4">
               <TreatmentRecordsCard
                 records={records}
                 total={recordsTotal}

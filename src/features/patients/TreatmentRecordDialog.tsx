@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { uploadImageViaPresign } from "@/features/media/api";
 import { getSupplies } from "@/features/inventory/api";
 import { SUPPLY_UNIT_LABELS } from "@/features/inventory/format";
 import type { Supply } from "@/features/inventory/types";
@@ -345,6 +346,7 @@ export function TreatmentRecordDialog({
               value={images}
               onChange={(imgs) => form.setValue("images", imgs)}
               max={10}
+              uploadFile={uploadImageViaPresign}
             />
           </Labeled>
 
